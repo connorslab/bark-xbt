@@ -17,6 +17,66 @@ use serde_json::json;
 use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RawTaggedField, TaggedField};
 use lightning_types::features::Bolt11InvoiceFeatures;
 
+fn funded_tree_spec(user: &Keypair, server: &Keypair) -> Result<ark::tree::signed::VtxoTreeSpec, Box<dyn std::error::Error>> {
+	use ark::tree::signed::{VtxoTreeSpec, VtxoLeafSpec, TreeExitFunding};
+	let cosign = Keypair::from_secret_key(&ark::SECP, &SecretKey::from_slice(&[8; 32])?);
+	Ok(VtxoTreeSpec::new([30_000, 50_000].into_iter().map(|sats| VtxoLeafSpec {
+		vtxo: ark::VtxoRequest { amount: Amount::from_sat(sats), policy: ark::VtxoPolicy::new_pubkey(user.public_key()) },
+		cosign_pubkey: None, unlock_hash: sha256::Hash::hash(&[7; 32]),
+	}).collect(), server.public_key(), BlockHeight::new(1000), BlockDelta::new(6),
+		vec![cosign.public_key(), server.public_key()])
+		.with_exit_funding(TreeExitFunding::new(Amount::from_sat(330), Amount::from_sat(1000))?)?)
+}
+
+fn funded_tree_recovery(funding: &Transaction, user: &Keypair, server: &Keypair) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+	use ark::tree::signed::{LeafVtxoCosignContext, LeafVtxoCosignResponse};
+	let spec = funded_tree_spec(user, server)?;
+	let idx = funding.output.iter().position(|o| *o == spec.funding_tx_txout()).ok_or("tree funding mismatch")?;
+	let unsigned = spec.into_unsigned_tree(OutPoint::new(funding.compute_txid(), idx as u32));
+	let cosign = Keypair::from_secret_key(&ark::SECP, &SecretKey::from_slice(&[8; 32])?);
+	let nonces = |key: &Keypair| -> (Vec<_>, Vec<_>) {
+		unsigned.internal_sighashes.iter().map(|h| ark::musig::nonce_pair_with_msg(key, &h.to_byte_array())).unzip()
+	};
+	let (user_secs, user_pubs) = nonces(&cosign);
+	let (server_secs, server_pubs) = nonces(server);
+	let agg = user_pubs.iter().zip(&server_pubs).map(|(u, s)| ark::musig::AggregatedNonce::new(&[u, s])).collect::<Vec<_>>();
+	let us = unsigned.cosign_tree(&agg, &cosign, user_secs);
+	let ss = unsigned.cosign_tree(&agg, server, server_secs);
+	let sigs = unsigned.combine_partial_signatures(&agg, &std::collections::HashMap::new(), &[&us, &ss])?;
+	let cached = unsigned.into_signed_tree(sigs).into_cached_tree();
+	let mut parents = Vec::new();
+	let mut seen = std::collections::HashSet::new();
+	let mut claims = Vec::new();
+	for mut vtxo in cached.output_vtxos() {
+		let (ctx, request) = LeafVtxoCosignContext::new(&vtxo, funding, user)?;
+		let response = LeafVtxoCosignResponse::new_cosign(&request, &vtxo, funding, server)?;
+		assert!(ctx.finalize(&mut vtxo, response));
+		assert!(vtxo.provide_unlock_preimage([7; 32]));
+		vtxo.validate(funding)?;
+		let restored = ark::Vtxo::<ark::vtxo::Full>::deserialize(&vtxo.serialize())?;
+		restored.validate(funding)?;
+		for item in restored.transactions() {
+			if seen.insert(item.tx.compute_txid()) { parents.push(serialize_hex(&item.tx)); }
+		}
+		let mut claim = Transaction {
+			version: bitcoin::transaction::Version(3), lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![TxIn { previous_output: vtxo.point(), sequence: Sequence(6), ..TxIn::default() }],
+			output: vec![TxOut { value: vtxo.amount() - Amount::from_sat(700),
+				script_pubkey: ScriptBuf::new_p2tr(&ark::SECP, user.x_only_public_key().0, None) }],
+		};
+		let clause = DelayedSignClause { pubkey: user.public_key(), block_delta: BlockDelta::new(6) };
+		let script = clause.tapscript();
+		let hash = unified::digest(&claim, 0, &[vtxo.txout()], unified::ALL, Execution {
+			script_type: 3, script_code: None, annex: None,
+			leaf: Some((bitcoin::TapLeafHash::from_script(&script, bitcoin::taproot::LeafVersion::TapScript), u32::MAX)),
+		})?;
+		let sig = ark::SECP.sign_schnorr(&hash.into(), user);
+		claim.input[0].witness = clause.witness(&sig, &clause.control_block(&vtxo));
+		claims.push(serialize_hex(&claim));
+	}
+	Ok(json!({"parents": parents, "claims": claims}))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let args: Vec<_> = env::args().collect();
 	let user = Keypair::from_secret_key(&ark::SECP, &SecretKey::from_slice(&[4; 32])?);
@@ -55,9 +115,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let builder = BoardBuilder::new(user.public_key(), BlockHeight::new(1000),
 		server.public_key(), BlockDelta::new(6));
 	if args.get(1).map(String::as_str) == Some("addresses") {
+		let tree = funded_tree_spec(&user, &server)?;
 		println!("{}", json!({
 			"key": Address::from_script(&key_spk, Network::Regtest)?.to_string(),
 			"board": Address::from_script(&builder.funding_script_pubkey(), Network::Regtest)?.to_string(),
+			"tree": Address::from_script(&tree.funding_tx_script_pubkey(), Network::Regtest)?.to_string(),
+			"tree_amount_sat": tree.total_required_value().to_sat(),
 		}));
 		return Ok(());
 	}
@@ -103,6 +166,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		return Ok(());
 	}
 	let funding: Transaction = deserialize(&Vec::<u8>::from_hex(input.trim())?)?;
+	if args.get(1).map(String::as_str) == Some("funded-tree") {
+		println!("{}", funded_tree_recovery(&funding, &user, &server)?);
+		return Ok(());
+	}
 	let key_idx = funding.output.iter().position(|o| o.script_pubkey == key_spk).ok_or("key output")?;
 	let board_idx = funding.output.iter().position(|o| o.script_pubkey == builder.funding_script_pubkey()).ok_or("board output")?;
 	let make_tx = |point, value, sequence| Transaction {
@@ -187,6 +254,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let final_tx = vtxo.transactions().last().ok_or("missing final exit")?.tx;
 	let mut cpfp = make_tx(OutPoint::new(board.compute_txid(), 1), Amount::from_sat(330), Sequence::MAX);
 	cpfp.input[0].witness = Witness::new(); // P2A, deliberately signature-free.
+	if funded {
+		let outsider = Keypair::from_secret_key(&ark::SECP, &SecretKey::from_slice(&[9; 32])?);
+		cpfp.output[0].script_pubkey = ScriptBuf::new_p2tr(&ark::SECP, outsider.x_only_public_key().0, None);
+	}
 	let mut claim = make_tx(vtxo.point(),
 		vtxo.amount() - Amount::from_sat(700), Sequence(6));
 	let clause = DelayedSignClause { pubkey: claim_key.public_key(), block_delta: BlockDelta::new(6) };

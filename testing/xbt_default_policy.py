@@ -47,7 +47,8 @@ def main():
             btc.rpc("generatetoaddress", 110, miner)
             addresses = probe("addresses")
             funding_id = btc.rpc("sendmany", "", {
-                addresses["key"]: 0.001, addresses["board"]: 0.001}, wallet=True)
+                addresses["key"]: 0.001, addresses["board"]: 0.001,
+                addresses["tree"]: addresses["tree_amount_sat"] / 100_000_000}, wallet=True)
             btc.rpc("generatetoaddress", 1, miner)
             funding = btc.rpc("gettransaction", funding_id, wallet=True)["hex"]
             for height in range(1, 112):
@@ -62,17 +63,28 @@ def main():
             old = probe("sign", funding)
             rejected = xbt.rpc("testmempoolaccept", [old["board"]])[0]
             assert not rejected["allowed"], rejected
+            assert "min relay fee" in rejected.get("reject-reason", ""), rejected
             report["legacy_parent_rejected"] = rejected
 
             # Signing finishes before any withdrawal is broadcast. No server
             # process or RPC participates in the following recovery steps.
             txs = probe("funded-transfer", funding)
+            recovery_file = root / "signed-recovery.json"
+            recovery_file.write_text(json.dumps(txs))
+            del txs
+            txs = json.loads(recovery_file.read_text())
             report["transactions"] = txs
             accepted = xbt.rpc("testmempoolaccept", [txs["board"]])[0]
             assert accepted["allowed"], accepted
             report["standalone_parent_acceptance"] = accepted
             board_id = xbt.rpc("sendrawtransaction", txs["board"])
             wait_for(lambda: board_id in relay.rpc("getrawmempool"))
+
+            # An unrelated party spends the public anchor before the user's
+            # payment descendants are broadcast. Their independent fees must
+            # still make those descendants relayable.
+            anchor_id = xbt.rpc("sendrawtransaction", txs["cpfp"])
+            wait_for(lambda: anchor_id in relay.rpc("getrawmempool"))
             parent_ids = [board_id]
             for raw in txs["recovery_parents"][1:]:
                 check = xbt.rpc("testmempoolaccept", [raw])[0]
@@ -81,12 +93,15 @@ def main():
                 wait_for(lambda: parent_id in relay.rpc("getrawmempool"))
                 parent_ids.append(parent_id)
 
-            # The anchor is public. Another spender taking it must not remove
-            # the user's already-funded recovery path.
-            anchor_id = xbt.rpc("sendrawtransaction", txs["cpfp"])
-            wait_for(lambda: anchor_id in relay.rpc("getrawmempool"))
+            xbt.restart()
+            wait_for(lambda: len(relay.rpc("getpeerinfo")) == 0)
+            relay.rpc("addnode", "127.0.0.1:18945", "onetry")
+            wait_for(lambda: len(relay.rpc("getpeerinfo")) == 1)
+            assert set(parent_ids + [anchor_id]).issubset(xbt.rpc("getrawmempool"))
+            report["recovery_survived_backend_restart"] = True
             early = relay.rpc("testmempoolaccept", [txs["claim"]])[0]
             assert not early["allowed"], early
+            assert "non-BIP68-final" in early.get("reject-reason", ""), early
             report["early_claim_rejected"] = early
             blocks = relay.rpc("generatetoaddress", 7, miner)
             wait_for(lambda: xbt.rpc("getbestblockhash") == relay.rpc("getbestblockhash"))
@@ -99,6 +114,27 @@ def main():
             assert set(parent_ids + [anchor_id, claim_id]).issubset(included)
             report["confirmed_recovery_parents"] = parent_ids
             report["confirmed_txids"] = {"board": board_id, "anchor": anchor_id, "claim": claim_id}
+            tree = probe("funded-tree", funding)
+            tree_parents = []
+            for raw in tree["parents"]:
+                acceptance = xbt.rpc("testmempoolaccept", [raw])[0]
+                assert acceptance["allowed"], acceptance
+                txid = xbt.rpc("sendrawtransaction", raw)
+                wait_for(lambda: txid in relay.rpc("getrawmempool"))
+                tree_parents.append(txid)
+            blocks = relay.rpc("generatetoaddress", 7, miner)
+            wait_for(lambda: xbt.rpc("getbestblockhash") == relay.rpc("getbestblockhash"))
+            tree_claims = []
+            for raw in tree["claims"]:
+                accepted = xbt.rpc("testmempoolaccept", [raw])[0]
+                assert accepted["allowed"], accepted
+                txid = xbt.rpc("sendrawtransaction", raw)
+                wait_for(lambda: txid in relay.rpc("getrawmempool"))
+                tree_claims.append(txid)
+            blocks += relay.rpc("generatetoaddress", 1, miner)
+            included = {txid for block in blocks for txid in relay.rpc("getblock", block)["tx"]}
+            assert set(tree_parents + tree_claims).issubset(included)
+            report["funded_tree"] = {"parents": tree_parents, "claims": tree_claims, "transactions": tree}
             report["default_policy_peer_relay"] = True
             report["passed"] = True
             for node in reversed(nodes):

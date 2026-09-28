@@ -213,6 +213,7 @@ impl VtxoTreeSpec {
 
 	/// Select the funded profile before the funding transaction or signatures exist.
 	pub fn with_exit_funding(mut self, funding: TreeExitFunding) -> Result<Self, &'static str> {
+		if self.vtxos.len() < 2 { return Err("funded tree requires at least two leaves; use a board for one balance"); }
 		let overhead = funding.anchor.checked_add(funding.miner_fee).ok_or("reserve overflow")?;
 		let reserves = overhead.checked_mul(self.nb_nodes() as u64).ok_or("reserve overflow")?;
 		let total = self.vtxos.iter().try_fold(reserves, |sum, v| {
@@ -1919,6 +1920,10 @@ mod test {
 				vec![server.public_key()]);
 			assert_eq!(spec.serialize()[0], 2);
 			let profile = TreeExitFunding::new(Amount::from_sat(330), Amount::from_sat(1000)).unwrap();
+			if count == 1 {
+				assert!(spec.with_exit_funding(profile).is_err());
+				continue;
+			}
 			let spec = spec.with_exit_funding(profile).unwrap();
 			encoding_roundtrip(&spec);
 			assert_eq!(spec.serialize()[0], 3);

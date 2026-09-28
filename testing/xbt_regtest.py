@@ -28,6 +28,7 @@ class Node:
                 "-connect=0", "-dnsseed=0", "-discover=0", "-networkactive=0",
                 "-rpcbind=127.0.0.1", f"-rpcport={port}", "-dbcache=64", "-par=1",
                 "-acceptnonstdtxn=0", "-fallbackfee=0.00002", *extra]
+        self.args = args
         self.proc = subprocess.Popen(args, stdout=self.log, stderr=subprocess.STDOUT)
         for _ in range(120):
             try:
@@ -65,6 +66,20 @@ class Node:
                 self.proc.terminate()
                 self.proc.wait(timeout=10)
             self.log.close()
+
+    def restart(self):
+        self.stop()
+        self.log = (self.data / "process.log").open("a")
+        self.proc = subprocess.Popen(self.args, stdout=self.log, stderr=subprocess.STDOUT)
+        for _ in range(120):
+            try:
+                assert self.rpc("getblockchaininfo")["chain"] == "regtest"
+                return
+            except Exception:
+                if self.proc.poll() is not None:
+                    raise RuntimeError((self.data / "process.log").read_text())
+                time.sleep(0.25)
+        raise RuntimeError("private regtest restart failed")
 
 
 def main():
