@@ -22,3 +22,5 @@ mod onchain;
 mod recover;
 mod round;
 mod vtxos;
+
+mod xbt;

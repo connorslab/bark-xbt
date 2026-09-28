@@ -43,14 +43,14 @@ jobs:
       - name: Check wallet and server
         if: ${{ !cancelled() }}
         run: nix develop --command cargo check -p bark-wallet -p bark-server
-      - name: Private Bark client and server boarding test
+      - name: Private Bark client and server lifecycle
         run: |
           nix develop --command bash -euc '
             cargo build -p bark-cli -p bark-server --bins
             export XBT_BITCOIND=/tmp/xbt-knots/bin/bitcoind
             export BITCOIND_EXEC="$PWD/testing/xbt-bitcoind"
             export ASSUME_BUILT=1
-            just int "--test bark board::board_bark --test-threads 1"
+            just int "--test bark xbt_lifecycle --test-threads 1"
           '
       - name: Preserve build cache after test failures
         if: ${{ !cancelled() && steps.rust-cache.outputs.cache-hit != 'true' }}
