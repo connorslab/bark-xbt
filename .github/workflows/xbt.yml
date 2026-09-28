@@ -45,7 +45,13 @@ jobs:
         run: |
           nix develop --command cargo test -p bark-bitcoin-ext unified
       - name: Check funded exit accounting
-        run: nix develop --command cargo test -p ark-lib funded_
+        run: nix develop --command cargo test -p ark-lib funded_ 2>&1 | tee funded-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: funded-unit-log
+          path: funded-tests.log
+          retention-days: 7
 
       - name: Build actual Ark regtest probe
         run: nix develop --command cargo build -p xbt-probe 2>&1 | tee probe-build.log

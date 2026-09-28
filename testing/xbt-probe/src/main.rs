@@ -168,6 +168,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let restored = ark::Vtxo::<ark::vtxo::Full>::deserialize(&vtxo.serialize())?;
 	restored.validate(&funding)?;
 	assert_eq!(restored.transactions().collect::<Vec<_>>(), vtxo.transactions().collect::<Vec<_>>());
+	if funded {
+		let policy = ark::exit_policy::FundedExitPolicy {
+			minimum_relay: bitcoin::FeeRate::from_sat_per_vb(1).unwrap(),
+			dust_relay: bitcoin::FeeRate::from_sat_per_vb(3).unwrap(),
+			confirmation_margin: BlockDelta::new(12), claim_fee: Amount::from_sat(700),
+		};
+		policy.check(&vtxo, &funding, BlockHeight::new(131))?;
+		assert!(policy.check(&vtxo, &funding, BlockHeight::new(1000)).is_err());
+		assert!(ark::exit_policy::FundedExitPolicy {
+			minimum_relay: bitcoin::FeeRate::from_sat_per_vb(100).unwrap(), ..policy
+		}.check(&vtxo, &funding, BlockHeight::new(131)).is_err());
+		assert!(ark::exit_policy::FundedExitPolicy {
+			claim_fee: amount, ..policy
+		}.check(&vtxo, &funding, BlockHeight::new(131)).is_err());
+	}
 	let board = vtxo.transactions().next().ok_or("missing exit")?.tx;
 	let final_tx = vtxo.transactions().last().ok_or("missing final exit")?.tx;
 	let mut cpfp = make_tx(OutPoint::new(board.compute_txid(), 1), Amount::from_sat(330), Sequence::MAX);

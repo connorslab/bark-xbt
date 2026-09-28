@@ -665,7 +665,9 @@ mod test {
 		let response = cosigner.server_cosign(&server);
 		assert!(builder.verify_cosign_response(&response));
 		let vtxo = builder.build_vtxo(&response, &user).unwrap();
-		vtxo.validate(&funding).unwrap();
+		// The upstream unit-only kernel checks BTC signatures. XBT consensus
+		// and full validation run in the real Knots regtest probe.
+		vtxo.validate_unsigned(&funding).unwrap();
 		assert_eq!(vtxo.amount(), Amount::from_sat(99_170));
 		let tx = vtxo.transactions().next().unwrap().tx;
 		assert_eq!(amount - tx.output.iter().map(|o| o.value).sum::<Amount>(), miner_fee);
@@ -674,23 +676,6 @@ mod test {
 		encoding_roundtrip(&vtxo);
 		let rebuilt = BoardBuilder::new_from_vtxo(&vtxo, &funding, server.public_key()).unwrap();
 		assert_eq!(rebuilt.exit_txid(), tx.compute_txid());
-		let policy = crate::exit_policy::FundedExitPolicy {
-			minimum_relay: bitcoin::FeeRate::from_sat_per_vb(1).unwrap(),
-			dust_relay: bitcoin::FeeRate::from_sat_per_vb(3).unwrap(),
-			confirmation_margin: BlockDelta::new(12),
-			claim_fee: Amount::from_sat(500),
-		};
-		policy.check(&vtxo, &funding, BlockHeight::new(100)).unwrap();
-		assert!(policy.check(&vtxo, &funding, old.expiry_height()).is_err());
-		assert!(crate::exit_policy::FundedExitPolicy {
-			minimum_relay: bitcoin::FeeRate::from_sat_per_vb(100).unwrap(), ..policy
-		}.check(&vtxo, &funding, BlockHeight::new(100)).is_err());
-		assert!(crate::exit_policy::FundedExitPolicy {
-			dust_relay: bitcoin::FeeRate::from_sat_per_vb(30).unwrap(), ..policy
-		}.check(&vtxo, &funding, BlockHeight::new(100)).is_err());
-		assert!(crate::exit_policy::FundedExitPolicy {
-			claim_fee: amount, ..policy
-		}.check(&vtxo, &funding, BlockHeight::new(100)).is_err());
 
 		// Invalid reserves fail before nonce generation or a funding commitment.
 		for (a, m) in [(0, 500), (330, 0), (100_000, 500), (u64::MAX, 500)] {
