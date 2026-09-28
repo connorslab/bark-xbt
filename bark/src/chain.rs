@@ -292,7 +292,7 @@ impl ChainSource {
 				let rpc = BitcoindClient::new(url, async_auth, None, None, None)
 					.context("failed to create async bitcoind rpc client")?;
 				rpc.require_txindex().await?;
-				let hash = rpc.get_best_block_hash().await?;
+				let hash: BlockHash = rpc.call_raw("getbestblockhash", &[]).await?;
 				let raw: String = rpc.call_raw("getblockheader", &[serde_json::to_value(hash)?, false.into()]).await?;
 				anyhow::ensure!(raw.len() == 328, "XBT backend must be activated before starting Bark");
 				(ChainSourceClient::Bitcoind { rpc, sync }, zmq)

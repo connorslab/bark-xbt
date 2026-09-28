@@ -3,7 +3,8 @@ use std::{env, io::{self, Read}};
 
 use ark::board::BoardBuilder;
 use ark::vtxo::policy::clause::{DelayedSignClause, TapScriptClause};
-use bitcoin::consensus::{deserialize, serialize_hex};
+use bitcoin::consensus::deserialize;
+use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::hex::FromHex;
 use bitcoin::key::TapTweak;
 use bitcoin::secp256k1::{Keypair, SecretKey};

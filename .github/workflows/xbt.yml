@@ -23,7 +23,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: xbt-rust-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
-          restore-keys: xbt-rust-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
+          restore-keys: |
+            xbt-rust-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
+            xbt-rust-${{ runner.os }}-
       - name: Check modified Ark library
         run: nix develop --command cargo check -p ark-lib -p bark-bitcoin-ext
       - name: Check unified digest tests
@@ -31,7 +33,13 @@ jobs:
           nix develop --command cargo test -p bark-bitcoin-ext unified
 
       - name: Build actual Ark regtest probe
-        run: nix develop --command cargo build -p xbt-probe
+        run: nix develop --command cargo build -p xbt-probe 2>&1 | tee probe-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-build-log
+          path: probe-build.log
+          retention-days: 3
       - name: Download pinned Knots test binary
         run: |
           curl -fL --retry 3 https://github.com/bitcoinknots/bitcoin/releases/download/v29.4.2.knots20260508/bitcoin-29.4.2.knots20260508-x86_64-linux-gnu.tar.gz -o /tmp/knots.tar.gz

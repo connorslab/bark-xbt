@@ -21,7 +21,7 @@ use std::sync::atomic::{self, AtomicBool};
 use tokio::sync::oneshot;
 use tracing::{trace, warn};
 
-use server_rpc::{pver, RequestExt};
+use server_rpc::RequestExt;
 
 use crate::error::{BadArgument, NotFound, UnusableInputs};
 

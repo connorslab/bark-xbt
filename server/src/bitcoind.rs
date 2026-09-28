@@ -252,7 +252,7 @@ pub async fn require_network(client: &Client, expected: Network) -> anyhow::Resu
 	anyhow::ensure!(expected == Network::Regtest, "experimental XBT port is regtest-only");
 	let network = client.network().await
 		.context("failed to query network from bitcoind")?;
-	let hash = client.get_best_block_hash().await?;
+	let hash: BlockHash = client.call_raw("getbestblockhash", &[]).await?;
 	let raw: String = client.call_raw("getblockheader", &[json_arg(hash)?, false.into()]).await?;
 	anyhow::ensure!(raw.len() == 328, "XBT backend must be activated before starting Bark");
 	if network != expected {
