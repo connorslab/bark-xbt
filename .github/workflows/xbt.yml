@@ -27,7 +27,7 @@ jobs:
         run: nix develop --command cargo check -p ark-lib -p bark-bitcoin-ext
       - name: Check unified digest tests
         run: |
-          nix develop --command cargo test -p bark-bitcoin-ext --no-default-features unified::
+          nix develop --command cargo test -p bark-bitcoin-ext unified
 
       - name: Build actual Ark regtest probe
         run: nix develop --command cargo build -p ark-lib --example xbt_regtest --features test-util

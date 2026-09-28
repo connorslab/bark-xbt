@@ -95,3 +95,46 @@ pub fn sign(wallet: &Wallet, psbt: &mut Psbt) -> Result<bool, Error> {
 	*psbt = result;
 	Ok(true)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use bdk_wallet::chain::BlockId;
+	use bdk_wallet::test_utils::{insert_checkpoint, receive_output_in_latest_block};
+	use bitcoin::{Amount, BlockHash, Network};
+	use bitcoin::hashes::Hash;
+
+	#[test]
+	fn unified_wallet_signs_and_rejects_legacy_request_atomically() {
+		let master = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &[42; 32]).unwrap();
+		let mut wallet = Wallet::create(
+			format!("tr({master}/0/*)"), format!("tr({master}/1/*)"))
+			.network(Network::Regtest).create_wallet_no_persist().unwrap();
+		insert_checkpoint(&mut wallet, BlockId { height: 1000, hash: BlockHash::all_zeros() });
+		receive_output_in_latest_block(&mut wallet, Amount::from_sat(100_000));
+		let address = wallet.reveal_next_address(KeychainKind::External).address;
+		let mut builder = wallet.build_tx();
+		builder.add_recipient(address.script_pubkey(), Amount::from_sat(50_000));
+		builder.fee_absolute(Amount::from_sat(1000));
+		let psbt = builder.finish().unwrap();
+		let mut invalid = psbt.clone();
+		invalid.inputs[0].sighash_type = Some(bitcoin::TapSighashType::Default.into());
+		let before = invalid.clone();
+		assert!(sign(&wallet, &mut invalid).is_err());
+		assert_eq!(invalid, before);
+		let mut signed = psbt;
+		assert!(sign(&wallet, &mut signed).unwrap());
+		let prevouts = signed.inputs.iter().map(|p| p.witness_utxo.clone().unwrap()).collect::<Vec<_>>();
+		for (idx, input) in signed.inputs.iter().enumerate() {
+			let witness = input.final_script_witness.as_ref().unwrap();
+			assert_eq!(witness.len(), 1);
+			let sig = witness.iter().next().unwrap();
+			assert_eq!(sig.len(), 65);
+			assert_eq!(sig[64], unified::ALL);
+			let hash = unified::digest(&signed.unsigned_tx, idx, &prevouts, unified::ALL,
+				Execution { script_type: 2, script_code: None, annex: None, leaf: None }).unwrap();
+			let pubkey = bitcoin::secp256k1::XOnlyPublicKey::from_slice(&prevouts[idx].script_pubkey.as_bytes()[2..]).unwrap();
+			Secp256k1::new().verify_schnorr(&bitcoin::secp256k1::schnorr::Signature::from_slice(&sig[..64]).unwrap(), &hash.into(), &pubkey).unwrap();
+		}
+	}
+}

@@ -855,7 +855,7 @@ mod tests {
 		// Extract should fail on a witness that reveals no matching preimage
 		let other_preimage = [7u8; 32];
 		let no_preimage = Witness::from_slice(&[
-			&sig[..],
+			&bitcoin_ext::unified::signature(&sig)[..],
 			&other_preimage[..],
 			clause.tapscript().as_bytes(),
 			&cb.serialize()[..],
@@ -911,7 +911,7 @@ mod tests {
 		let sig = SECP.sign_schnorr(&sighash.into(), &*USER_KEYPAIR);
 
 		let witness = Witness::from_slice(&[
-			&sig[..],
+			&bitcoin_ext::unified::signature(&sig)[..],
 			&preimage[..],
 			tapscript.as_bytes(),
 			&cb.serialize()[..],

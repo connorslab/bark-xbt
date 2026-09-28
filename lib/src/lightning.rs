@@ -712,3 +712,20 @@ mod test {
 		assert_eq!(currency.to_bitcoin_amount(), None);
 	}
 }
+
+#[cfg(test)]
+mod xbt_identity_tests {
+	use lightning::types::features::Bolt11InvoiceFeatures;
+
+	#[test]
+	fn xbt_identity_does_not_hide_other_required_features() {
+		let mut features = Bolt11InvoiceFeatures::empty();
+		assert!(!features.requires_blake2b_identity());
+		features.set_blake2b_identity_required();
+		assert!(features.requires_blake2b_identity());
+		assert!(!features.requires_unknown_bits());
+		let mut flags = features.le_flags().to_vec();
+		flags[64] |= 4; // Unknown required bit 514 in an invoice.
+		assert!(Bolt11InvoiceFeatures::from_le_bytes(flags).requires_unknown_bits());
+	}
+}

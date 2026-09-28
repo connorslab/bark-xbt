@@ -27,8 +27,8 @@ use bitcoin_ext::{BlockHeight, BlockRef, DEEPLY_CONFIRMED, TxStatus};
 use serde::Deserialize;
 use serde_json::Value;
 
-/// v31 added the chunk fields of `getmempoolentry`.
-const MIN_BITCOIND_VERSION: usize = 31_00_00;
+/// Knots 29 is supported with a conservative pre-cluster fee estimate.
+const MIN_BITCOIND_VERSION: usize = 29_00_00;
 
 /// Build a [`bitcoind_async_client::Client`] from our config-supplied auth.
 ///
@@ -190,18 +190,44 @@ pub struct MempoolEntryFees {
 pub async fn chunk_fee_rate(
 	client: &Client, txid: Txid,
 ) -> Result<Option<FeeRate>, ClientError> {
-	let entry: MempoolEntry = match client.call_raw(
+	let raw: Value = match client.call_raw(
 		"getmempoolentry", &[json_arg(txid)?],
 	).await {
 		Ok(e) => e,
 		Err(e) if e.is_not_found() => return Ok(None),
 		Err(e) => return Err(e),
 	};
+	if raw.get("chunkweight").is_none() {
+		// Knots 29 has no chunk API. A lower bound must not credit a low-fee
+		// transaction with a high-fee parent that can confirm independently.
+		// Taking the minimum individual ancestor rate may cause extra bump
+		// attempts, but never claims a package is sufficiently funded when
+		// one of its members is not. This is not an exact Core 31 chunk rate.
+		let ancestors: std::collections::HashMap<String, Value> = client.call_raw(
+			"getmempoolancestors", &[json_arg(txid)?, true.into()],
+		).await?;
+		let mut rate = legacy_member_rate(raw)?;
+		for entry in ancestors.into_values() { rate = rate.min(legacy_member_rate(entry)?); }
+		return Ok(Some(rate));
+	}
+	let entry: MempoolEntry = serde_json::from_value(raw)
+		.map_err(|e| ClientError::Parse(e.to_string()))?;
 	let weight = Weight::from_wu(entry.chunk_weight);
 	let feerate = entry.fees.chunk.div_by_weight_floor(weight).ok_or_else(|| {
 		ClientError::Parse("invalid chunk fee/weight from getmempoolentry".to_owned())
 	})?;
 	Ok(Some(feerate))
+}
+
+/// Conservative fee floor for a pre-cluster mempool member.
+fn legacy_member_rate(raw: Value) -> Result<FeeRate, ClientError> {
+	#[derive(Deserialize)]
+	struct Fees { #[serde(with = "bitcoin::amount::serde::as_btc")] modified: Amount }
+	#[derive(Deserialize)]
+	struct Entry { vsize: u64, fees: Fees }
+	let entry: Entry = serde_json::from_value(raw).map_err(|e| ClientError::Parse(e.to_string()))?;
+	Weight::from_vb(entry.vsize).and_then(|w| entry.fees.modified.div_by_weight_floor(w))
+		.ok_or_else(|| ClientError::Parse("invalid legacy mempool weight/fee".into()))
 }
 
 pub async fn submit_package<T: Borrow<Transaction>>(
@@ -223,8 +249,12 @@ pub async fn test_mempool_accept(
 // --- Startup checks ------------------------------------------------------
 
 pub async fn require_network(client: &Client, expected: Network) -> anyhow::Result<()> {
+	anyhow::ensure!(expected == Network::Regtest, "experimental XBT port is regtest-only");
 	let network = client.network().await
 		.context("failed to query network from bitcoind")?;
+	let hash = client.get_best_block_hash().await?;
+	let raw: String = client.call_raw("getblockheader", &[json_arg(hash)?, false.into()]).await?;
+	anyhow::ensure!(raw.len() == 328, "XBT backend must be activated before starting Bark");
 	if network != expected {
 		bail!("Network mismatch: server is configured to use {:?} but bitcoind uses {:?}",
 			expected, network,
@@ -239,7 +269,7 @@ pub async fn require_version(client: &Client) -> anyhow::Result<()> {
 	let res: Response = client.call_raw("getnetworkinfo", &[]).await
 		.context("failed to get version from bitcoind")?;
 	if res.version < MIN_BITCOIND_VERSION {
-		bail!("Old bitcoind version detected. Please upgrade to v31 or later");
+		bail!("Old bitcoind version detected. Please upgrade to Knots v29 or later");
 	}
 	Ok(())
 }
@@ -247,6 +277,12 @@ pub async fn require_version(client: &Client) -> anyhow::Result<()> {
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	#[test]
+	fn legacy_fee_floor_handles_large_and_invalid_entries() {
+		assert_eq!(legacy_member_rate(serde_json::json!({"vsize": 1000, "fees": {"modified": 0.0001}})).unwrap().to_sat_per_kwu(), 2500);
+		assert!(legacy_member_rate(serde_json::json!({"vsize": 0, "fees": {"modified": 0.0001}})).is_err());
+	}
 
 	#[test]
 	fn mempool_entry_parses_chunk_fields() {

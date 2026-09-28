@@ -266,6 +266,8 @@ impl ChainSource {
 		fallback_fee: Option<FeeRate>,
 		#[cfg(feature = "socks5-proxy")] proxy: Option<&str>,
 	) -> anyhow::Result<Self> {
+		anyhow::ensure!(network == Network::Regtest, "experimental XBT port is regtest-only");
+		anyhow::ensure!(!matches!(&spec, ChainSourceSpec::Esplora { .. }), "XBT requires a local Knots RPC backend; Esplora is not validated");
 		let (inner, zmq_endpoint) = match spec {
 			#[cfg(feature = "bitcoind-rpc")]
 			ChainSourceSpec::Bitcoind { url, auth, zmq } => {
@@ -290,6 +292,9 @@ impl ChainSource {
 				let rpc = BitcoindClient::new(url, async_auth, None, None, None)
 					.context("failed to create async bitcoind rpc client")?;
 				rpc.require_txindex().await?;
+				let hash = rpc.get_best_block_hash().await?;
+				let raw: String = rpc.call_raw("getblockheader", &[serde_json::to_value(hash)?, false.into()]).await?;
+				anyhow::ensure!(raw.len() == 328, "XBT backend must be activated before starting Bark");
 				(ChainSourceClient::Bitcoind { rpc, sync }, zmq)
 			},
 			#[cfg(not(feature = "bitcoind-rpc"))]

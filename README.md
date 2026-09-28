@@ -10,9 +10,9 @@ a fail-closed Taproot wallet signer, and Blake2b extended-header support.
 The client/server protocol uses a separate experimental version namespace.
 Mainnet wallet startup is disabled while integration validation is unfinished.
 
-Current upstream Bark requires Core 31 mempool semantics. Compatibility with
-Knots 29 must be demonstrated, not assumed or bypassed by changing the version
-check. Full Lightning/hold-invoice integration, full lifecycle tests, fee policy,
+Upstream Bark uses Core 31 mempool chunks. This port adds a conservative
+individual-ancestor fee floor for Knots 29; it can cause extra fee-bump
+attempts and is not an exact chunk estimate. Full Lightning/hold-invoice integration, full lifecycle tests, fee policy,
 and recovery testing remain release gates. See CI for tested scope; a library
 check or digest test is not proof that the complete service works.
 
