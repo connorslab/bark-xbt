@@ -1,7 +1,8 @@
 
+use bitcoin_ext::unified::UnifiedSighash;
 use bitcoin::absolute::LockTime;
 use bitcoin::hashes::sha256;
-use bitcoin::key::constants::SCHNORR_SIGNATURE_SIZE;
+use bitcoin_ext::unified::SIGNATURE_SIZE as SCHNORR_SIGNATURE_SIZE;
 use bitcoin::secp256k1::schnorr;
 use bitcoin::taproot::{self, ControlBlock};
 use bitcoin::{Sequence, VarInt, Witness};
@@ -80,7 +81,7 @@ impl TapScriptClause for DelayedSignClause {
 		control_block: &ControlBlock,
 	) -> Witness {
 		Witness::from_slice(&[
-			&signature[..],
+			&bitcoin_ext::unified::signature(signature)[..],
 			self.tapscript().as_bytes(),
 			&control_block.serialize()[..],
 		])
@@ -137,7 +138,7 @@ impl TapScriptClause for TimelockSignClause {
 		control_block: &ControlBlock,
 	) -> Witness {
 		Witness::from_slice(&[
-			&signature[..],
+			&bitcoin_ext::unified::signature(signature)[..],
 			self.tapscript().as_bytes(),
 			&control_block.serialize()[..],
 		])
@@ -203,7 +204,7 @@ impl TapScriptClause for DelayedTimelockSignClause {
 		control_block: &ControlBlock,
 	) -> Witness {
 		Witness::from_slice(&[
-			&signature[..],
+			&bitcoin_ext::unified::signature(signature)[..],
 			self.tapscript().as_bytes(),
 			&control_block.serialize()[..],
 		])
@@ -285,7 +286,7 @@ impl TapScriptClause for HashDelaySignClause {
 	) -> Witness {
 		let (signature, preimage) = data;
 		Witness::from_slice(&[
-			&signature[..],
+			&bitcoin_ext::unified::signature(signature)[..],
 			&preimage[..],
 			self.tapscript().as_bytes(),
 			&control_block.serialize()[..],
@@ -371,7 +372,7 @@ impl TapScriptClause for HashDelaySignClause_v0 {
 	) -> Witness {
 		let (signature, preimage) = data;
 		Witness::from_slice(&[
-			&signature[..],
+			&bitcoin_ext::unified::signature(signature)[..],
 			&preimage[..],
 			self.tapscript().as_bytes(),
 			&control_block.serialize()[..],
@@ -426,7 +427,7 @@ impl TapScriptClause for HashSignClause {
 	) -> Witness {
 		let (signature, preimage) = data;
 		Witness::from_slice(&[
-			&signature[..],
+			&bitcoin_ext::unified::signature(signature)[..],
 			&preimage[..],
 			self.tapscript().as_bytes(),
 			&control_block.serialize()[..],
@@ -482,7 +483,7 @@ impl TapScriptClause for HashSignClause_v0 {
 	) -> Witness {
 		let (signature, preimage) = data;
 		Witness::from_slice(&[
-			&signature[..],
+			&bitcoin_ext::unified::signature(signature)[..],
 			&preimage[..],
 			self.tapscript().as_bytes(),
 			&control_block.serialize()[..],
@@ -669,7 +670,7 @@ mod tests {
 		);
 
 		let mut shc = sighash::SighashCache::new(tx);
-		let sighash = shc.taproot_script_spend_signature_hash(
+		let sighash = shc.unified_taproot_script_spend_signature_hash(
 			0, &sighash::Prevouts::All(&[input.clone()]), leaf_hash, sighash::TapSighashType::Default,
 		).expect("all prevouts provided");
 
@@ -900,7 +901,7 @@ mod tests {
 			taproot::LeafVersion::TapScript,
 		);
 		let mut shc = sighash::SighashCache::new(&tx);
-		let sighash = shc.taproot_signature_hash(
+		let sighash = shc.unified_taproot_signature_hash(
 			0,
 			&sighash::Prevouts::All(&[tx_in.clone()]),
 			Some(sighash::Annex::new(&annex).unwrap()),
@@ -997,7 +998,7 @@ mod tests {
 		);
 
 		let mut shc = sighash::SighashCache::new(&tx);
-		let sighash = shc.taproot_script_spend_signature_hash(
+		let sighash = shc.unified_taproot_script_spend_signature_hash(
 			0, &sighash::Prevouts::All(&[tx_in.clone()]), leaf_hash, sighash::TapSighashType::Default,
 		).expect("all prevouts provided");
 

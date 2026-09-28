@@ -13,6 +13,7 @@
 //! indicate when they can be swept.
 //!
 
+use bitcoin_ext::unified::UnifiedSighash;
 use std::borrow::Borrow;
 
 use bitcoin::{
@@ -391,13 +392,13 @@ where
 				// The connector fanout tx spends the offboard's connector output, a
 				// key-path-only p2tr for the server key. Sign it; otherwise it would
 				// be stored/broadcast with an empty witness and rejected by the mempool.
-				let sighash = SighashCache::new(&tx).taproot_key_spend_signature_hash(
+				let sighash = SighashCache::new(&tx).unified_taproot_key_spend_signature_hash(
 					0, &Prevouts::All(&[connector_fanout_txout]), TapSighashType::Default,
 				).expect("provided the connector prevout");
 				let sig = SECP.sign_schnorr_with_aux_rand(
 					&sighash.into(), &tweaked_connector_key, &rand::random(),
 				);
-				tx.input[0].witness = Witness::from_slice(&[&sig[..]]);
+				tx.input[0].witness = Witness::from_slice(&[bitcoin_ext::unified::signature(&sig)]);
 
 				tx
 			};
@@ -546,7 +547,7 @@ fn user_sign_vtxo_forfeit_input<G: Sync + Send>(
 	let tx = create_offboard_forfeit_tx(vtxo, connector, None, None);
 	let mut shc = SighashCache::new(&tx);
 	let prevouts = [&vtxo.txout(), &connector_txout];
-	let sighash = shc.taproot_key_spend_signature_hash(
+	let sighash = shc.unified_taproot_key_spend_signature_hash(
 		0, &Prevouts::All(&prevouts), TapSighashType::Default,
 	).expect("provided all prevouts");
 	let tweak = vtxo.output_taproot().tap_tweak().to_byte_array();
@@ -595,7 +596,7 @@ fn server_check_finalize_forfeit_tx<G: Sync + Send>(
 	let mut shc = SighashCache::new(&tx);
 	let prevouts = [&vtxo.txout(), &connector_txout];
 	let vtxo_sig = {
-		let sighash = shc.taproot_key_spend_signature_hash(
+		let sighash = shc.unified_taproot_key_spend_signature_hash(
 			0, &Prevouts::All(&prevouts), TapSighashType::Default,
 		).expect("provided all prevouts");
 		let vtxo_taproot = vtxo.output_taproot();
@@ -638,14 +639,14 @@ fn server_check_finalize_forfeit_tx<G: Sync + Send>(
 	};
 
 	let conn_sig = {
-		let sighash = shc.taproot_key_spend_signature_hash(
+		let sighash = shc.unified_taproot_key_spend_signature_hash(
 			1, &Prevouts::All(&prevouts), TapSighashType::Default,
 		).expect("provided all prevouts");
 		SECP.sign_schnorr_with_aux_rand(&sighash.into(), tweaked_connector_key, &rand::random())
 	};
 
-	tx.input[0].witness = Witness::from_slice(&[&vtxo_sig[..]]);
-	tx.input[1].witness = Witness::from_slice(&[&conn_sig[..]]);
+	tx.input[0].witness = Witness::from_slice(&[bitcoin_ext::unified::signature(&vtxo_sig)]);
+	tx.input[1].witness = Witness::from_slice(&[bitcoin_ext::unified::signature(&conn_sig)]);
 	debug_assert_eq!(tx,
 		create_offboard_forfeit_tx(vtxo, connector, Some(&vtxo_sig), Some(&conn_sig)),
 	);
@@ -676,13 +677,13 @@ fn create_offboard_forfeit_tx<G: Sync + Send>(
 				previous_output: vtxo.point(),
 				sequence: Sequence::MAX,
 				script_sig: ScriptBuf::new(),
-				witness: vtxo_sig.map(|s| Witness::from_slice(&[&s[..]])).unwrap_or_default(),
+				witness: vtxo_sig.map(|s| Witness::from_slice(&[bitcoin_ext::unified::signature(&s)])).unwrap_or_default(),
 			},
 			TxIn {
 				previous_output: connector,
 				sequence: Sequence::MAX,
 				script_sig: ScriptBuf::new(),
-				witness: conn_sig.map(|s| Witness::from_slice(&[&s[..]])).unwrap_or_default(),
+				witness: conn_sig.map(|s| Witness::from_slice(&[bitcoin_ext::unified::signature(&s)])).unwrap_or_default(),
 			},
 		],
 		output: vec![

@@ -1,5 +1,6 @@
 
 
+use bitcoin_ext::unified::UnifiedSighash;
 use std::iter;
 use std::borrow::Cow;
 
@@ -164,11 +165,11 @@ impl ConnectorChain {
 			value: ConnectorChain::required_budget(self.len - idx),
 		};
 		let mut shc = SighashCache::new(&*tx);
-		let sighash = shc.taproot_key_spend_signature_hash(
+		let sighash = shc.unified_taproot_key_spend_signature_hash(
 			0, &sighash::Prevouts::All(&[prevout]), TapSighashType::Default,
 		).expect("sighash error");
 		let sig = SECP.sign_schnorr_with_aux_rand(&sighash.into(), &keypair, &rand::random());
-		tx.input[0].witness = Witness::from_slice(&[&sig[..]]);
+		tx.input[0].witness = Witness::from_slice(&[bitcoin_ext::unified::signature(&sig)]);
 	}
 
 	/// Iterator over the signed transactions in this chain.

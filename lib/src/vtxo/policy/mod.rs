@@ -26,6 +26,7 @@
 //! and watchman `exit_delta + htlc_expiry_delta`); the extra 2x of headroom is
 //! defensive so future operations can be added without retuning the bounds.
 
+use bitcoin_ext::unified::UnifiedSighash;
 pub mod clause;
 pub mod signing;
 
@@ -1426,7 +1427,7 @@ mod tests {
 			taproot::LeafVersion::TapScript,
 		);
 		let mut shc = SighashCache::new(&tx);
-		let sighash = shc.taproot_script_spend_signature_hash(
+		let sighash = shc.unified_taproot_script_spend_signature_hash(
 			0, &sighash::Prevouts::All(&[tx_in.clone()]), leaf_hash, sighash::TapSighashType::Default,
 		).expect("all prevouts provided");
 
@@ -1500,7 +1501,7 @@ mod tests {
 			taproot::LeafVersion::TapScript,
 		);
 		let mut shc = SighashCache::new(&tx);
-		let sighash = shc.taproot_script_spend_signature_hash(
+		let sighash = shc.unified_taproot_script_spend_signature_hash(
 			0, &sighash::Prevouts::All(&[tx_in.clone()]), leaf_hash, sighash::TapSighashType::Default,
 		).expect("all prevouts provided");
 

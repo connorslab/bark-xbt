@@ -1,3 +1,4 @@
+use bitcoin_ext::unified::UnifiedSighash;
 use std::fmt;
 
 use bitcoin::secp256k1::{schnorr, PublicKey};
@@ -85,7 +86,7 @@ impl CosignedGenesis {
 
 	pub fn witness(&self) -> Witness {
 		match self.signature {
-			Some(ref sig) => Witness::from_slice(&[&sig[..]]),
+			Some(ref sig) => Witness::from_slice(&[bitcoin_ext::unified::signature(&sig)]),
 			None => Witness::new(),
 		}
 	}
@@ -110,7 +111,7 @@ impl CosignedGenesis {
 
 		let mut shc = sighash::SighashCache::new(tx);
 
-		let tapsighash = shc.taproot_key_spend_signature_hash(
+		let tapsighash = shc.unified_taproot_key_spend_signature_hash(
 			input_idx,
 			&sighash::Prevouts::All(&[prev_txout]),
 			sighash::TapSighashType::Default
@@ -183,7 +184,7 @@ impl HashLockedCosignedGenesis {
 		let cb = taproot.control_block(&script_leaf)
 			.expect("unlock clause not found in hArk taproot");
 		Witness::from_slice(&[
-			&sig.serialize()[..],
+			&bitcoin_ext::unified::signature(&sig)[..],
 			&preimage[..],
 			&script_leaf.0.as_bytes(),
 			&cb.serialize()[..],
@@ -221,7 +222,7 @@ impl HashLockedCosignedGenesis {
 			.x_only_public_key().0;
 		let script = unlock_clause(agg_pk, self.unlock.hash());
 		let leaf = TapLeafHash::from_script(&script, bitcoin::taproot::LeafVersion::TapScript);
-		let tapsighash = shc.taproot_script_spend_signature_hash(
+		let tapsighash = shc.unified_taproot_script_spend_signature_hash(
 			input_idx, &sighash::Prevouts::All(&[prev_txout]), leaf, sighash::TapSighashType::Default,
 		).expect("correct prevouts");
 
@@ -297,7 +298,7 @@ impl HashLockedCosignedGenesis_v0 {
 		let cb = taproot.control_block(&script_leaf)
 			.expect("unlock clause not found in hArk taproot");
 		Witness::from_slice(&[
-			&sig.serialize()[..],
+			&bitcoin_ext::unified::signature(&sig)[..],
 			&preimage[..],
 			&script_leaf.0.as_bytes(),
 			&cb.serialize()[..],
@@ -335,7 +336,7 @@ impl HashLockedCosignedGenesis_v0 {
 			.x_only_public_key().0;
 		let script = unlock_clause_v0(agg_pk, self.unlock.hash());
 		let leaf = TapLeafHash::from_script(&script, bitcoin::taproot::LeafVersion::TapScript);
-		let tapsighash = shc.taproot_script_spend_signature_hash(
+		let tapsighash = shc.unified_taproot_script_spend_signature_hash(
 			input_idx, &sighash::Prevouts::All(&[prev_txout]), leaf, sighash::TapSighashType::Default,
 		).expect("correct prevouts");
 
@@ -385,7 +386,7 @@ impl ArkoorGenesis {
 
 	pub fn witness(&self) -> Witness {
 		match self.signature {
-			Some(sig) => Witness::from_slice(&[&sig[..]]),
+			Some(sig) => Witness::from_slice(&[bitcoin_ext::unified::signature(&sig)]),
 			None => Witness::new(),
 		}
 	}
@@ -409,7 +410,7 @@ impl ArkoorGenesis {
 
 		let mut shc = sighash::SighashCache::new(tx);
 
-		let tapsighash = shc.taproot_key_spend_signature_hash(
+		let tapsighash = shc.unified_taproot_key_spend_signature_hash(
 			input_idx,
 			&sighash::Prevouts::All(&[prev_txout]),
 			sighash::TapSighashType::Default

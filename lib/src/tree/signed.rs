@@ -1,5 +1,6 @@
 
 
+use bitcoin_ext::unified::UnifiedSighash;
 use std::{cmp, fmt, io, iter};
 use std::collections::{HashMap, VecDeque};
 
@@ -408,7 +409,7 @@ impl VtxoTreeSpec {
 	) -> Vec<Transaction> {
 		let mut txs = self.unsigned_transactions(utxo);
 		for (tx, sig) in txs.iter_mut().skip(self.nb_leaves()).zip(internal_signatures) {
-			tx.input[0].witness.push(&sig[..]);
+			tx.input[0].witness.push(bitcoin_ext::unified::signature(&sig));
 		}
 		txs
 	}
@@ -499,7 +500,7 @@ impl UnsignedVtxoTree {
 			};
 
 			let mut shc = SighashCache::new(&txs[node.idx()]);
-			shc.taproot_key_spend_signature_hash(
+			shc.unified_taproot_key_spend_signature_hash(
 				0, // input idx is always 0
 				&sighash::Prevouts::All(&[prev]),
 				TapSighashType::Default,
@@ -1174,7 +1175,7 @@ pub fn hashlocked_leaf_sighash(
 	let clause = unlock_clause(agg_pk, unlock_hash);
 	let leaf_hash = TapLeafHash::from_script(&clause, bitcoin::taproot::LeafVersion::TapScript);
 	let mut shc = SighashCache::new(leaf_tx);
-	shc.taproot_script_spend_signature_hash(
+	shc.unified_taproot_script_spend_signature_hash(
 		0, // input idx is always 0
 		&sighash::Prevouts::All(&[prev_txout]),
 		leaf_hash,
@@ -1195,7 +1196,7 @@ pub fn hashlocked_leaf_sighash_v0(
 	let clause = unlock_clause_v0(agg_pk, unlock_hash);
 	let leaf_hash = TapLeafHash::from_script(&clause, bitcoin::taproot::LeafVersion::TapScript);
 	let mut shc = SighashCache::new(leaf_tx);
-	shc.taproot_script_spend_signature_hash(
+	shc.unified_taproot_script_spend_signature_hash(
 		0, // input idx is always 0
 		&sighash::Prevouts::All(&[prev_txout]),
 		leaf_hash,

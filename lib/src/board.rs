@@ -11,6 +11,7 @@
 //! * user validates cosign response using [BoardBuilder::verify_cosign_response]
 //! * user finishes the vtxos by cross-signing using [BoardBuilder::build_vtxo]
 
+use bitcoin_ext::unified::UnifiedSighash;
 use std::marker::PhantomData;
 
 use bitcoin::sighash::{self, SighashCache};
@@ -66,7 +67,7 @@ fn compute_exit_data(
 	};
 
 	let tx = vtxo::create_exit_tx(utxo, exit_txout, None, fee);
-	let sighash = SighashCache::new(&tx).taproot_key_spend_signature_hash(
+	let sighash = SighashCache::new(&tx).unified_taproot_key_spend_signature_hash(
 		0, &sighash::Prevouts::All(&[funding_txout]), sighash::TapSighashType::Default,
 	).expect("matching prevouts");
 

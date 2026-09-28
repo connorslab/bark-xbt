@@ -1,4 +1,5 @@
 
+use bitcoin_ext::unified::UnifiedSighash;
 use std::borrow::Borrow;
 
 use bitcoin::hashes::Hash;
@@ -83,13 +84,13 @@ pub trait VtxoSigner<P: Policy = VtxoPolicy> {
 		sighash_cache: &mut sighash::SighashCache<impl Borrow<Transaction> + Send + Sync>,
 		prevouts: &sighash::Prevouts<impl Borrow<TxOut> + Send + Sync>,
 	) -> Result<Witness, CannotSignVtxoError> {
-		let sighash = sighash_cache.taproot_key_spend_signature_hash(
+		let sighash = sighash_cache.unified_taproot_key_spend_signature_hash(
 			input_idx, &prevouts, sighash::TapSighashType::Default,
 		).expect("all prevouts provided");
 
 		let sig = self.sign_keyspend(vtxo, sighash).await
 			.ok_or(CannotSignVtxoError)?;
-		let witness = Witness::from_slice(&[&sig[..]]);
+		let witness = Witness::from_slice(&[bitcoin_ext::unified::signature(&sig)]);
 
 		Ok(witness)
 	}
@@ -115,7 +116,7 @@ pub trait VtxoSigner<P: Policy = VtxoPolicy> {
 			taproot::LeafVersion::TapScript,
 		);
 
-		let sighash = sighash_cache.taproot_script_spend_signature_hash(
+		let sighash = sighash_cache.unified_taproot_script_spend_signature_hash(
 			input_idx, &prevouts, leaf_hash, sighash::TapSighashType::Default,
 		).expect("all prevouts provided");
 

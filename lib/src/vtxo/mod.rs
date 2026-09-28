@@ -323,7 +323,7 @@ pub fn create_exit_tx(
 			witness: {
 				let mut ret = Witness::new();
 				if let Some(sig) = signature {
-					ret.push(&sig[..]);
+					ret.push(bitcoin_ext::unified::signature(&sig));
 				}
 				ret
 			},

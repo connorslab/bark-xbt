@@ -6,6 +6,7 @@ pub extern crate bitcoin;
 
 pub mod cpfp;
 pub mod fee;
+pub mod unified;
 
 #[cfg(feature = "bdk")]
 pub mod bdk;

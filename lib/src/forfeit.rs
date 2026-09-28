@@ -1,5 +1,6 @@
 
 
+use bitcoin_ext::unified::UnifiedSighash;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness};
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::{schnorr, Keypair, PublicKey};
@@ -40,7 +41,7 @@ pub fn create_hark_forfeit_tx<G>(
 				previous_output: vtxo.point(),
 				sequence: Sequence::MAX,
 				script_sig: ScriptBuf::new(),
-				witness: signature.map(|s| Witness::from_slice(&[&s[..]])).unwrap_or_default(),
+				witness: signature.map(|s| Witness::from_slice(&[bitcoin_ext::unified::signature(&s)])).unwrap_or_default(),
 			},
 		],
 		output: vec![
@@ -62,7 +63,7 @@ fn hark_forfeit_sighash<G>(
 ) -> (TapSighash, Transaction) {
 	let exit_prevout = vtxo.txout();
 	let tx = create_hark_forfeit_tx(vtxo, unlock_hash, None);
-	let sighash = SighashCache::new(&tx).taproot_key_spend_signature_hash(
+	let sighash = SighashCache::new(&tx).unified_taproot_key_spend_signature_hash(
 		0, &sighash::Prevouts::All(&[exit_prevout]), TapSighashType::Default,
 	).expect("sighash error");
 	(sighash, tx)
@@ -239,7 +240,7 @@ impl HashLockedForfeitBundle {
 		));
 
 		// fill in the signature in the tx
-		ff_tx.input[0].witness = Witness::from_slice(&[&ff_sig[..]]);
+		ff_tx.input[0].witness = Witness::from_slice(&[bitcoin_ext::unified::signature(&ff_sig)]);
 		debug_assert_eq!(ff_tx, create_hark_forfeit_tx(vtxo, self.unlock_hash, Some(&ff_sig)));
 
 		let ff_txid = ff_tx.compute_txid();
@@ -291,13 +292,13 @@ pub fn create_connector_forfeit_tx<G>(
 				previous_output: vtxo.point(),
 				sequence: Sequence::ZERO,
 				script_sig: ScriptBuf::new(),
-				witness: forfeit_sig.map(|s| Witness::from_slice(&[&s[..]])).unwrap_or_default(),
+				witness: forfeit_sig.map(|s| Witness::from_slice(&[bitcoin_ext::unified::signature(&s)])).unwrap_or_default(),
 			},
 			TxIn {
 				previous_output: connector,
 				sequence: Sequence::ZERO,
 				script_sig: ScriptBuf::new(),
-				witness: connector_sig.map(|s| Witness::from_slice(&[&s[..]])).unwrap_or_default(),
+				witness: connector_sig.map(|s| Witness::from_slice(&[bitcoin_ext::unified::signature(&s)])).unwrap_or_default(),
 			},
 		],
 		output: vec![
@@ -325,7 +326,7 @@ fn connector_forfeit_input_sighash<G>(
 		value: P2TR_DUST,
 	};
 	let tx = create_connector_forfeit_tx(vtxo, connector, None, None);
-	let sighash = SighashCache::new(&tx).taproot_key_spend_signature_hash(
+	let sighash = SighashCache::new(&tx).unified_taproot_key_spend_signature_hash(
 		input_idx,
 		&sighash::Prevouts::All(&[exit_prevout, connector_prevout]),
 		TapSighashType::Default,

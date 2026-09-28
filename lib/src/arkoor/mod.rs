@@ -101,6 +101,7 @@
 //! [500, 100] directly.
 //!
 
+use bitcoin_ext::unified::UnifiedSighash;
 pub mod package;
 
 use std::marker::PhantomData;
@@ -1697,7 +1698,7 @@ impl<'a> ArkoorBuilder<state::UserSigned> {
 fn arkoor_sighash(prevout: &TxOut, arkoor_tx: &Transaction) -> TapSighash {
 	let mut shc = SighashCache::new(arkoor_tx);
 
-	shc.taproot_key_spend_signature_hash(
+	shc.unified_taproot_key_spend_signature_hash(
 		0, &sighash::Prevouts::All(&[prevout]), TapSighashType::Default,
 	).expect("sighash error")
 }
