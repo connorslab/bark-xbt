@@ -1,0 +1,17 @@
+name: XBT isolated validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  environment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - name: Confirm upstream development environment
+        run: nix develop --command bash -c 'echo "IN_NIX_SHELL=$IN_NIX_SHELL"; command -v cargo; command -v bitcoind; command -v just'
