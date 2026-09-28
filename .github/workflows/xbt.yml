@@ -26,4 +26,6 @@ jobs:
       - name: Check modified Ark library
         run: nix develop --command cargo check -p ark-lib
       - name: Check unified digest tests
-        run: nix develop --command cargo test -p bark-bitcoin-ext --no-default-features unified::
+        run: |
+          nix develop --command cargo test -p bark-bitcoin-ext --no-default-features unified::
+
