@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 jobs:
   environment:
     runs-on: ubuntu-24.04
@@ -58,7 +61,8 @@ jobs:
             export XBT_BITCOIND=/tmp/xbt-knots/bin/bitcoind
             export BITCOIND_EXEC="$PWD/testing/xbt-bitcoind"
             export ASSUME_BUILT=1
-            just int "--test bark xbt_lifecycle --test-threads 1"
+            set -o pipefail
+            just int "--test bark xbt_lifecycle --test-threads 1" 2>&1 | tee xbt-lifecycle.log
           '
       - name: Preserve build cache after test failures
         if: ${{ !cancelled() && steps.rust-cache.outputs.cache-hit != 'true' }}
@@ -75,5 +79,6 @@ jobs:
           name: xbt-regtest-evidence
           path: |
             xbt-regtest-report.json
+            xbt-lifecycle.log
             Cargo.lock
           retention-days: 14

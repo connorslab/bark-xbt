@@ -10,3 +10,5 @@ ark-lib = { path = "../../lib" }
 bark-bitcoin-ext = { path = "../../bitcoin-ext", default-features = false }
 bitcoin.workspace = true
 serde_json.workspace = true
+lightning-invoice.workspace = true
+lightning-types = "0.3.1"

@@ -6,17 +6,50 @@ use ark::vtxo::policy::clause::{DelayedSignClause, TapScriptClause};
 use bitcoin::consensus::deserialize;
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::hex::FromHex;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::TapTweak;
 use bitcoin::secp256k1::{Keypair, SecretKey};
 use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness};
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use bitcoin_ext::unified::{self, Execution};
 use serde_json::json;
+use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RawTaggedField, TaggedField};
+use lightning_types::features::Bolt11InvoiceFeatures;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let args: Vec<_> = env::args().collect();
 	let user = Keypair::from_secret_key(&ark::SECP, &SecretKey::from_slice(&[4; 32])?);
 	let server = Keypair::from_secret_key(&ark::SECP, &SecretKey::from_slice(&[5; 32])?);
+	if args.get(1).map(String::as_str) == Some("identity") {
+		let invoice = InvoiceBuilder::new(Currency::Regtest).description("private XBT test".into())
+			.payment_hash(sha256::Hash::hash(&[7; 32])).payment_secret(PaymentSecret([8; 32]))
+			.current_timestamp().min_final_cltv_expiry_delta(18).amount_milli_satoshis(1000)
+			.build_signed(|m| ark::SECP.sign_ecdsa_recoverable(m, &user.secret_key()))?;
+		assert!(ark::lightning::Invoice::Bolt11(invoice.clone()).require_xbt().is_err());
+		let original = invoice.into_signed_raw().into_parts().0;
+		for mode in [0u8, 1, 2] {
+			let mut raw = original.clone();
+			for field in &mut raw.data.tagged_fields {
+				if let RawTaggedField::KnownSemantics(TaggedField::Features(features)) = field {
+					features.set_blake2b_identity_required();
+					if mode == 1 { features.clear_blake2b_identity(); features.set_blake2b_identity_optional(); }
+					if mode == 2 {
+						let mut flags = features.le_flags().to_vec(); flags[64] |= 4;
+						*features = Bolt11InvoiceFeatures::from_le_bytes(flags);
+					}
+				}
+			}
+			let signed = raw.sign(|m| Ok::<_, std::convert::Infallible>(ark::SECP.sign_ecdsa_recoverable(m, &user.secret_key())))?;
+			let parsed = signed.to_string().parse::<Bolt11Invoice>();
+			if mode == 2 { assert!(parsed.is_err()); }
+			else {
+				let check = ark::lightning::Invoice::Bolt11(parsed?).require_xbt();
+				assert_eq!(check.is_ok(), mode == 0);
+			}
+		}
+		println!("{}", json!({"required_512_accepted": true, "missing_or_optional_rejected": true, "unknown_required_rejected": true}));
+		return Ok(());
+	}
 	let key_spk = ScriptBuf::new_p2tr(&ark::SECP, user.x_only_public_key().0, None);
 	let builder = BoardBuilder::new(user.public_key(), BlockHeight::new(1000),
 		server.public_key(), BlockDelta::new(6));

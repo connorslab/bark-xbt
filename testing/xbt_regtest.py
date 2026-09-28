@@ -72,6 +72,7 @@ def main():
     report = {"scope": "regtest consensus, Ark boarding/MuSig/exit and replay tests",
               "mainnet_sats_spent": 0, "complete_server_test": False}
     try:
+        report["lightning_identity"] = probe("identity")
         with tempfile.TemporaryDirectory(prefix="paperclip-bark-xbt-") as directory:
             root = Path(directory)
             xbt = Node(root, "xbt", os.environ["XBT_BITCOIND"], 18843,
