@@ -1,3 +1,23 @@
+# Paperclip Bark XBT — private experimental port
+
+**Regtest only. Incomplete and not suitable for real funds.**
+
+This repository preserves Second's Bark history and license. It is not an
+upstream Second release. Starting point: `3e1e4bf2e8594a1d1faa96dc953d0f8cd764ef8c`.
+
+The XBT port adds unified signature hashing, explicit 0x21 Ark witnesses,
+a fail-closed Taproot wallet signer, and Blake2b extended-header support.
+The client/server protocol uses a separate experimental version namespace.
+Mainnet wallet startup is disabled while integration validation is unfinished.
+
+Current upstream Bark requires Core 31 mempool semantics. Compatibility with
+Knots 29 must be demonstrated, not assumed or bypassed by changing the version
+check. Full Lightning/hold-invoice integration, full lifecycle tests, fee policy,
+and recovery testing remain release gates. See CI for tested scope; a library
+check or digest test is not proof that the complete service works.
+
+---
+
 ![bark: Ark on bitcoin](assets/bark-header-white.jpg)
 
 <div align="center">

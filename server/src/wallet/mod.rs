@@ -111,6 +111,7 @@ impl PersistedWallet {
 		deep_tip: BlockRef,
 		min_trusted_confs: u32,
 	) -> anyhow::Result<Self> {
+		anyhow::ensure!(network == Network::Regtest, "experimental XBT port is regtest-only");
 		let init = db.read(async |tx| { tx.read_aggregate_changeset(kind).await }).await?;
 		let fresh = init.is_none();
 
@@ -198,13 +199,8 @@ impl PersistedWallet {
 	///
 	/// This method does not persist changes to the database.
 	pub fn finish_tx(&mut self, mut psbt: Psbt) -> anyhow::Result<Transaction> {
-		#[allow(deprecated)]
-		let opts = bdk_wallet::SignOptions {
-			trust_witness_utxo: true,
-			..Default::default()
-		};
 		let fee = psbt.fee().context("error calculating fee")?;
-		let finalized = self.sign(&mut psbt, opts).context("error signing psbt")?;
+		let finalized = bitcoin_ext::unified_wallet::sign(self, &mut psbt).context("error signing psbt")?;
 		ensure!(finalized, "tx not finalized after signing, psbt: {}", psbt.serialize().as_hex());
 		let ret = psbt.extract_tx().context("error extracting finalized tx from psbt")?;
 		let txid = ret.compute_txid();

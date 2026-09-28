@@ -24,8 +24,26 @@ jobs:
           key: xbt-rust-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
           restore-keys: xbt-rust-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
       - name: Check modified Ark library
-        run: nix develop --command cargo check -p ark-lib
+        run: nix develop --command cargo check -p ark-lib -p bark-bitcoin-ext
       - name: Check unified digest tests
         run: |
           nix develop --command cargo test -p bark-bitcoin-ext --no-default-features unified::
 
+      - name: Build actual Ark regtest probe
+        run: nix develop --command cargo build -p ark-lib --example xbt_regtest --features test-util
+      - name: Download pinned Knots test binary
+        run: |
+          curl -fL --retry 3 https://github.com/bitcoinknots/bitcoin/releases/download/v29.4.2.knots20260508/bitcoin-29.4.2.knots20260508-x86_64-linux-gnu.tar.gz -o /tmp/knots.tar.gz
+          echo 'b59d0445a317e21a03dc29425db3aba79b27d5125230b1a2b1dce62e120827c5  /tmp/knots.tar.gz' | sha256sum -c -
+          mkdir -p /tmp/xbt-knots
+          tar -xf /tmp/knots.tar.gz -C /tmp/xbt-knots --strip-components=1
+      - name: Private regtest consensus and replay checks
+        run: XBT_BITCOIND=/tmp/xbt-knots/bin/bitcoind nix develop --command python3 testing/xbt_regtest.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xbt-regtest-evidence
+          path: |
+            xbt-regtest-report.json
+            Cargo.lock
+          retention-days: 14

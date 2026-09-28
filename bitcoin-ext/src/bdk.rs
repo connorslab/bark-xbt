@@ -293,7 +293,7 @@ pub enum CpfpInternalError {
 	NoFeeAnchor(Txid),
 	#[allow(deprecated)]
 	#[error("Unable to sign transaction: {0}")]
-	Signer(bdk_wallet::signer::SignerError),
+	Signer(crate::unified_wallet::Error),
 }
 
 /// An extension trait for [Wallet].
@@ -425,12 +425,7 @@ pub trait WalletExt: BorrowMut<Wallet> {
 				CreateTxError::CoinSelection(e) => CpfpInternalError::InsufficientConfirmedFunds(e),
 				_ => CpfpInternalError::Create(e),
 			})?;
-			#[allow(deprecated)]
-			let opts = bdk_wallet::SignOptions {
-				trust_witness_utxo: true,
-				..Default::default()
-			};
-			let finalized = wallet.sign(&mut psbt, opts)
+			let finalized = crate::unified_wallet::sign(wallet, &mut psbt)
 				.map_err(|e| CpfpInternalError::Signer(e))?;
 			if !finalized {
 				return Err(CpfpInternalError::FinalizeError("finalization failed".into()));

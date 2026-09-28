@@ -22,10 +22,10 @@ pub const CONNECTOR_TX_CHAIN_VOUT: u32 = 0;
 pub const CONNECTOR_TX_CONNECTOR_VOUT: u32 = 1;
 
 /// The weight of each connector tx.
-const TX_WEIGHT: Weight = Weight::from_vb_unchecked(167);
+const TX_WEIGHT: Weight = Weight::from_wu(669);
 
 /// The witness weight of a connector input.
-pub const INPUT_WEIGHT: Weight = Weight::from_wu(66);
+pub const INPUT_WEIGHT: Weight = Weight::from_wu(67);
 
 
 /// Construct a tx that breaks up a single connector output into N connectors

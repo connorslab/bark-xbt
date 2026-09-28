@@ -1664,19 +1664,19 @@ impl<'a> ArkoorBuilder<state::UserSigned> {
 		let mut sig_idx = 0usize;
 		if let Some((tx, _)) = &self.checkpoint_data {
 			let mut tx = tx.clone();
-			tx.input[0].witness.push(&sigs[sig_idx][..]);
+			tx.input[0].witness.push(bitcoin_ext::unified::signature(&sigs[sig_idx]));
 			ret.push(tx);
 			sig_idx = sig_idx.saturating_add(1);
 		}
 		for tx in &self.unsigned_arkoor_txs {
 			let mut tx = tx.clone();
-			tx.input[0].witness.push(&sigs[sig_idx][..]);
+			tx.input[0].witness.push(bitcoin_ext::unified::signature(&sigs[sig_idx]));
 			ret.push(tx);
 			sig_idx = sig_idx.saturating_add(1);
 		}
 		if let Some(tx) = &self.unsigned_isolation_fanout_tx {
 			let mut tx = tx.clone();
-			tx.input[0].witness.push(&sigs[sig_idx][..]);
+			tx.input[0].witness.push(bitcoin_ext::unified::signature(&sigs[sig_idx]));
 			ret.push(tx);
 		}
 		ret
@@ -2832,3 +2832,4 @@ mod test {
 		}
 	}
 }
+

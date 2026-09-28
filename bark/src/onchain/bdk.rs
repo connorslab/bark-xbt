@@ -159,6 +159,7 @@ impl DerefMut for OnchainWallet {
 
 impl OnchainWallet {
 	pub async fn load_or_create(network: Network, seed: [u8; 64], db: Arc<dyn BarkPersister>) -> anyhow::Result<Self> {
+		anyhow::ensure!(network == Network::Regtest, "experimental XBT port is regtest-only");
 		let xpriv = bip32::Xpriv::new_master(network, &seed).expect("valid seed");
 		let desc = bdk_wallet::template::Bip86(xpriv, KeychainKind::External);
 
@@ -238,12 +239,7 @@ impl OnchainWalletTrait for OnchainWallet {
 	}
 
 	async fn finish_psbt(&mut self, mut psbt: Psbt) -> anyhow::Result<Psbt> {
-		#[allow(deprecated)]
-		let opts = bdk_wallet::SignOptions {
-			trust_witness_utxo: true,
-			..Default::default()
-		};
-		let finalized = self.inner.sign(&mut psbt, opts).context("signing error")?;
+		let finalized = bitcoin_ext::unified_wallet::sign(&self.inner, &mut psbt).context("signing error")?;
 		ensure!(finalized, "failed to succesfully sign the tx");
 		let tx = psbt.clone().extract_tx()?;
 		self.inner.apply_unconfirmed_txs([(tx, bark_runtime::timestamp_secs())]);
@@ -403,12 +399,7 @@ impl OnchainWallet {
 	/// Sign a psbt. Wallet-graph application is deferred to
 	/// [`Self::record_broadcast_tx`].
 	async fn sign_psbt(&mut self, mut psbt: Psbt) -> anyhow::Result<Psbt> {
-		#[allow(deprecated)]
-		let opts = bdk_wallet::SignOptions {
-			trust_witness_utxo: true,
-			..Default::default()
-		};
-		let finalized = self.inner.sign(&mut psbt, opts).context("signing error")?;
+		let finalized = bitcoin_ext::unified_wallet::sign(&self.inner, &mut psbt).context("signing error")?;
 		ensure!(finalized, "failed to succesfully sign the tx");
 		Ok(psbt)
 	}

@@ -159,3 +159,56 @@ impl<R: Borrow<Transaction>> UnifiedSighash for SighashCache<R> {
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use bitcoin::{Amount, ScriptBuf};
+	use bitcoin::hex::FromHex;
+
+	#[test]
+	fn unified_knots_reference_vectors() {
+		let vectors: serde_json::Value = serde_json::from_str(
+			include_str!("../tests/data/unified_sighash.json")).unwrap();
+		let mut checked = 0;
+		for v in vectors.as_array().unwrap().iter().skip(1) {
+			let hash_type = v[3].as_u64().unwrap() as u8;
+			if !matches!(hash_type, 0x21 | 0x22 | 0x23 | 0xa1 | 0xa2 | 0xa3) { continue; }
+			let tx = bitcoin::consensus::deserialize::<Transaction>(
+				&Vec::<u8>::from_hex(v[1].as_str().unwrap()).unwrap()).unwrap();
+			let script = ScriptBuf::from_hex(v[0].as_str().unwrap()).unwrap();
+			let script_type = v[4].as_u64().unwrap() as u8;
+			let prevouts = v[5].as_array().unwrap().iter().map(|o| TxOut {
+				value: Amount::from_sat(o[0].as_u64().unwrap()),
+				script_pubkey: ScriptBuf::from_hex(o[1].as_str().unwrap()).unwrap(),
+			}).collect::<Vec<_>>();
+			let got = digest(&tx, v[2].as_u64().unwrap() as usize, &prevouts, hash_type,
+				Execution {
+					script_type,
+					script_code: if script_type < 2 { Some(&script) } else { None },
+					annex: None,
+					leaf: if script_type == 3 {
+						Some((TapLeafHash::from_script(&script, bitcoin::taproot::LeafVersion::TapScript), u32::MAX))
+					} else { None },
+				}).unwrap();
+			assert_eq!(got.to_byte_array().to_vec(), Vec::<u8>::from_hex(v[6].as_str().unwrap()).unwrap());
+			checked += 1;
+		}
+		assert!(checked >= 140, "checked only {checked} vectors");
+	}
+
+	#[test]
+	fn unified_rejects_missing_prevout_and_legacy_mode() {
+		let tx = Transaction { version: bitcoin::transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![bitcoin::TxIn::default()], output: vec![] };
+		let context = || Execution { script_type: 2, script_code: None, annex: None, leaf: None };
+		assert_eq!(digest(&tx, 0, &[], ALL, context()), Err(Error::Prevouts));
+		assert_eq!(digest(&tx, 1, &[], ALL, context()), Err(Error::Input));
+		let prevouts = [TxOut { value: Amount::from_sat(1000), script_pubkey: ScriptBuf::new() }];
+		for legacy in [0, 1, 3, 0x20, 0x81] {
+			assert_eq!(digest(&tx, 0, &prevouts, legacy, context()), Err(Error::HashType));
+		}
+		assert_eq!(digest(&tx, 0, &prevouts, 0x23, context()), Err(Error::Single));
+	}
+}

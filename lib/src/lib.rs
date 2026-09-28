@@ -291,7 +291,7 @@ pub mod scripts {
 		assert_eq!(tx.input.len(), sigs.len());
 		for (input, sig) in tx.input.iter_mut().zip(sigs.iter()) {
 			assert!(input.witness.is_empty());
-			input.witness.push(&sig[..]);
+			input.witness.push(bitcoin_ext::unified::signature(sig));
 			debug_assert_eq!(TAPROOT_KEYSPEND_WEIGHT.to_wu(), input.witness.size() as u64);
 		}
 	}

@@ -7,6 +7,8 @@ pub extern crate bitcoin;
 pub mod cpfp;
 pub mod fee;
 pub mod unified;
+#[cfg(feature = "bdk")]
+pub mod unified_wallet;
 
 #[cfg(feature = "bdk")]
 pub mod bdk;
@@ -58,7 +60,7 @@ pub const P2WSH_DUST_SAT: u64 = P2WSH_DUST_VB * 3;
 pub const P2WSH_DUST: Amount = Amount::from_sat(P2WSH_DUST_SAT);
 
 /// Witness weight of a taproot keyspend.
-pub const TAPROOT_KEYSPEND_WEIGHT: Weight = Weight::from_wu(66);
+pub const TAPROOT_KEYSPEND_WEIGHT: Weight = Weight::from_wu(67);
 
 /// The maximum standard tx weight
 pub const MAX_TX_WEIGHT: Weight = Weight::from_wu(400_000);
