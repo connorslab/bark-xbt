@@ -40,6 +40,7 @@ jobs:
       - name: Private regtest consensus and replay checks
         run: XBT_BITCOIND=/tmp/xbt-knots/bin/bitcoind nix develop --command python3 testing/xbt_regtest.py
       - name: Check wallet and server
+        if: ${{ !cancelled() }}
         run: nix develop --command cargo check -p bark-wallet -p bark-server
       - uses: actions/upload-artifact@v4
         if: always()
