@@ -10,7 +10,7 @@ import time
 import urllib.error
 import urllib.request
 
-PROBE = str(Path("target/debug/examples/xbt_regtest").resolve())
+PROBE = str(Path("target/debug/xbt-probe").resolve())
 REPORT = Path("xbt-regtest-report.json")
 
 

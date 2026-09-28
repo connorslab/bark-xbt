@@ -2,6 +2,7 @@
 [workspace]
 members = [
   "bitcoin-ext",
+  "testing/xbt-probe",
   "lib",
   "bark",
   "bark-common",
@@ -128,3 +129,8 @@ tracing-attributes = "0.1.31"
 [patch.crates-io]
 lightning-types = { path = "vendor/lightning-types" }
 bitcoin = { path = "vendor/bitcoin" }
+
+# Keep the large Lightning dependency inexpensive in the private test loop.
+[profile.dev.package.lightning]
+opt-level = 0
+debug = 0

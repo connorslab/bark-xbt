@@ -228,7 +228,7 @@ mod sealed {
 		PaymentMetadata,
 		// Byte 7
 		Trampoline,
-	
+
 		// XBT identity: byte 64, required bit 512.
 		,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
 		Blake2bIdentity,
@@ -260,7 +260,7 @@ mod sealed {
 		,
 		// Byte 7
 		Trampoline,
-	
+
 		// XBT identity: byte 64, required bit 512.
 		,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
 		Blake2bIdentity,

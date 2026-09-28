@@ -31,7 +31,7 @@ jobs:
           nix develop --command cargo test -p bark-bitcoin-ext unified
 
       - name: Build actual Ark regtest probe
-        run: nix develop --command cargo build -p ark-lib --example xbt_regtest --features test-util
+        run: nix develop --command cargo build -p xbt-probe
       - name: Download pinned Knots test binary
         run: |
           curl -fL --retry 3 https://github.com/bitcoinknots/bitcoin/releases/download/v29.4.2.knots20260508/bitcoin-29.4.2.knots20260508-x86_64-linux-gnu.tar.gz -o /tmp/knots.tar.gz
@@ -43,6 +43,15 @@ jobs:
       - name: Check wallet and server
         if: ${{ !cancelled() }}
         run: nix develop --command cargo check -p bark-wallet -p bark-server
+      - name: Private Bark client and server boarding test
+        run: |
+          nix develop --command bash -euc '
+            cargo build -p bark-cli -p bark-server --bins
+            export XBT_BITCOIND=/tmp/xbt-knots/bin/bitcoind
+            export BITCOIND_EXEC="$PWD/testing/xbt-bitcoind"
+            export ASSUME_BUILT=1
+            just int "--test bark board::board_bark --test-threads 1"
+          '
       - name: Preserve build cache after test failures
         if: ${{ !cancelled() && steps.rust-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
