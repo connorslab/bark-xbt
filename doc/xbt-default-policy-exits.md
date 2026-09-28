@@ -1,7 +1,20 @@
 # XBT default-policy emergency exits
 
-Status: development branch. Funded board and tree primitives are under test.
+Status: experimental development branch `knots-default-exits`, not a release.
+Funded board, shared-tree, and repeated-payment recovery passed a default-policy
+Knots regtest at commit `aad3daba` in [run 36499238589](https://github.com/connorslab/bark-xbt/actions/runs/36499238589).
+This result is the standalone transaction test, not the complete workflow result.
+The test confirmed peer relay, recovery after a backend restart, and recovery
+after another party consumed the public board anchor. An early CSV claim and
+the old zero-fee parent were rejected as expected.
+
 Wallet/server integration and default-policy lifecycle validation remain open.
+The normal application still requires its previous special relay configuration;
+the new constructors must not be confused with an enabled deployment feature.
+Wallet recognition of parents without anchor children is a subsequent change
+under test. Funded transaction creation, fee quotation, negotiation, automatic
+broadcast and fee bumping, admission checks, and full lifecycle tests remain
+necessary before enabling this profile.
 
 ## Recovery contract
 

@@ -565,7 +565,7 @@ impl GenesisItem {
 		fee::fee_anchor_with_amount(self.fee_amount)
 	}
 
-	/// The total sum of sibling tx outputs including the P2A fee output.
+	/// Value consumed outside the continuing output: siblings, anchor, and miner fee.
 	pub fn other_output_sum(&self) -> Option<Amount> {
 		let mut result = self.fee_amount.checked_add(self.miner_fee)?;
 		for o in &self.other_outputs {
