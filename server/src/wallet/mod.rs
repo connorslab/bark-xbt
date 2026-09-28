@@ -396,12 +396,13 @@ fn build_at_chunk_feerate<Cs: CoinSelectionAlgorithm + Clone>(
 ) -> anyhow::Result<(Psbt, AncestorSet)> {
 	// The signed weight is the unsigned weight, plus the satisfaction
 	// weight of each input, plus the segwit marker and flag. All inputs
-	// are ours. This is exact for `tr(key)`: miniscript assumes a
-	// 65-byte signature and omits the witness count byte, and the two
-	// errors cancel for a 64-byte signature.
+	// are ours. Miniscript assumes a 65-byte signature and omits the
+	// witness count byte. Unified signatures use all 65 bytes, so add
+	// that count byte explicitly instead of relying on the BTC offset.
 	let satisfaction_weight = wallet.public_descriptor(KEYCHAIN)
 		.max_weight_to_satisfy()
-		.context("failed to compute the descriptor satisfaction weight")?;
+		.context("failed to compute the descriptor satisfaction weight")?
+		+ Weight::from_wu(1);
 	let est_signed_weight = |psbt: &Psbt| {
 		psbt.unsigned_tx.weight()
 			+ satisfaction_weight * psbt.unsigned_tx.input.len() as u64
