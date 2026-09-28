@@ -132,11 +132,18 @@ def main():
             package = xbt.rpc("submitpackage", [transactions["board"], transactions["cpfp"]])
             assert package["package_msg"] == "success", package
             report["board_package"] = package
-            xbt.rpc("generatetoaddress", 7, miner)
+            mined = xbt.rpc("generatetoaddress", 7, miner)
             claim = xbt.rpc("testmempoolaccept", [transactions["claim"]])[0]
             assert claim["allowed"], claim
             report["claim_txid"] = xbt.rpc("sendrawtransaction", transactions["claim"])
-            xbt.rpc("generatetoaddress", 1, miner)
+            mined += xbt.rpc("generatetoaddress", 1, miner)
+            included = {txid for block in mined for txid in xbt.rpc("getblock", block)["tx"]}
+            confirmed = {}
+            for name in ["key", "board", "cpfp", "claim"]:
+                txid = xbt.rpc("decoderawtransaction", transactions[name])["txid"]
+                assert txid in included, f"{name} was accepted but not confirmed"
+                confirmed[name] = txid
+            report["confirmed_txids"] = confirmed
             report["claim"] = claim
             report["transactions"] = transactions
             report["passed"] = True
