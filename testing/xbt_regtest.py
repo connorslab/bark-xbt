@@ -100,6 +100,11 @@ def main():
             assert parsed["roundtrip"] == raw_header
             assert parsed["time"] == xbt.rpc("getblockheader", header_hash)["time"]
             report["header"] = parsed
+            raw_block = xbt.rpc("getblock", header_hash, 0)
+            parsed_block = probe("block", raw_block)
+            assert parsed_block["hash"] == header_hash, parsed_block
+            assert parsed_block["roundtrip"] == raw_block
+            report["full_block_roundtrip"] = True
             transactions = probe("sign", funding)
             # Both nodes have exactly the same funding outpoints. Prove the
             # negative replay result is a signature failure, not missing coins.
@@ -112,7 +117,8 @@ def main():
             rejected = btc.rpc("testmempoolaccept", [transactions["key"]])[0]
             assert accepted["allowed"], accepted
             assert not rejected["allowed"], rejected
-            assert "missing" not in rejected.get("reject-reason", "").lower(), rejected
+            reason = str(rejected).lower()
+            assert "sighash" in reason or "signature" in reason, rejected
             report["unified_keypath"] = {"xbt": accepted, "btc": rejected}
             report["key_txid"] = xbt.rpc("sendrawtransaction", transactions["key"])
             package = xbt.rpc("submitpackage", [transactions["board"], transactions["cpfp"]])

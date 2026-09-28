@@ -27,6 +27,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		return Ok(());
 	}
 	let mut input = String::new(); io::stdin().read_to_string(&mut input)?;
+	if args.get(1).map(String::as_str) == Some("block") {
+		let raw = Vec::<u8>::from_hex(input.trim())?;
+		let block: bitcoin::Block = deserialize(&raw)?;
+		assert!(block.check_merkle_root());
+		println!("{}", json!({"hash": block.block_hash().to_string(), "roundtrip": serialize_hex(&block)}));
+		return Ok(());
+	}
 	if args.get(1).map(String::as_str) == Some("header") {
 		let raw = Vec::<u8>::from_hex(input.trim())?;
 		let header: bitcoin::block::Header = deserialize(&raw)?;

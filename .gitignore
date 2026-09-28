@@ -31,3 +31,6 @@ contrib/agents/ci-debugging/
 
 # CI devShell env payloads, generated per-pipeline by contrib/generate-ci-env.sh
 /contrib/ci-env/*.env
+
+# Local private-regtest Python bytecode
+/testing/__pycache__/

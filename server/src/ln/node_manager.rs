@@ -696,6 +696,7 @@ impl LightningManager {
 		offer: Offer,
 		amount: Amount,
 	) -> anyhow::Result<Bolt12Invoice> {
+		anyhow::ensure!(offer.offer_features().requires_blake2b_identity(), "offer lacks required XBT identity bit 512");
 		let node = self.active_node().context("no active cln node")?;
 
 		let resp = node.rpc.clone().fetch_invoice(cln_rpc::FetchinvoiceRequest {
@@ -711,8 +712,10 @@ impl LightningManager {
 			bip353: None,
 		}).await?.into_inner();
 
-		Bolt12Invoice::from_str(&resp.invoice)
-			.map_err(|e| anyhow!("Invalid bolt12 invoice: {:?}", e))
+		let invoice = Bolt12Invoice::from_str(&resp.invoice)
+			.map_err(|e| anyhow!("Invalid bolt12 invoice: {:?}", e))?;
+		Invoice::Bolt12(invoice.clone()).require_xbt()?;
+		Ok(invoice)
 	}
 
 	pub fn activate(&self, uri: Uri) {
