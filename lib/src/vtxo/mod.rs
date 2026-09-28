@@ -111,7 +111,7 @@ pub const VTXO_DUST: Amount = P2TR_DUST;
 pub const EXIT_TX_WEIGHT: Weight = Weight::from_vb_unchecked(124);
 
 /// The current version of the vtxo encoding.
-const VTXO_ENCODING_VERSION: u16 = 2;
+const VTXO_ENCODING_VERSION: u16 = 3;
 /// The version before a fee amount was added to each genesis item.
 const VTXO_NO_FEE_AMOUNT_VERSION: u16 = 1;
 
@@ -1380,7 +1380,11 @@ impl VtxoVersionedEncoding for Bare {
 }
 
 impl VtxoVersionedEncoding for Full {
-	fn encode<W: io::Write + ?Sized>(&self, w: &mut W, _version: u16) -> Result<(), io::Error> {
+	fn encode<W: io::Write + ?Sized>(&self, w: &mut W, version: u16) -> Result<(), io::Error> {
+		if self.items.iter().any(|i| (version < 3 && i.miner_fee != Amount::ZERO)
+			|| (version == 1 && i.fee_amount != Amount::ZERO)) {
+			return Err(io::Error::other("cannot discard exit funding in an older encoding"));
+		}
 		w.emit_compact_size(self.items.len() as u64)?;
 		for item in &self.items {
 			item.transition.encode(w)?;
@@ -1391,7 +1395,8 @@ impl VtxoVersionedEncoding for Full {
 			for txout in &item.other_outputs {
 				txout.encode(w)?;
 			}
-			w.emit_u64(item.fee_amount.to_sat())?;
+			if version >= 2 { w.emit_u64(item.fee_amount.to_sat())?; }
+			if version >= 3 { w.emit_u64(item.miner_fee.to_sat())?; }
 		}
 		Ok(())
 	}
@@ -1429,7 +1434,12 @@ impl VtxoVersionedEncoding for Full {
 			} else {
 				Amount::from_sat(r.read_u64()?)
 			};
-			genesis.push(GenesisItem { transition, output_idx, other_outputs, fee_amount });
+			let miner_fee = if version >= 3 {
+				Amount::from_sat(r.read_u64()?)
+			} else {
+				Amount::ZERO
+			};
+			genesis.push(GenesisItem { transition, output_idx, other_outputs, fee_amount, miner_fee });
 		}
 		Ok(Full { items: genesis })
 	}
@@ -1501,7 +1511,7 @@ where
 	R: io::Read + ?Sized,
 {
 	let version = r.read_u16()?;
-	if version != VTXO_ENCODING_VERSION && version != VTXO_NO_FEE_AMOUNT_VERSION {
+	if !matches!(version, 1 | 2 | VTXO_ENCODING_VERSION) {
 		return Err(ProtocolDecodingError::invalid(format_args!(
 			"invalid Vtxo encoding version byte: {version:#x}",
 		)));
@@ -1748,6 +1758,7 @@ mod test {
 			anchor_point: OutPoint::new(Txid::from_slice(&[1u8; 32]).unwrap(), 1),
 			genesis: Full {
 				items: vec![GenesisItem {
+					miner_fee: Amount::ZERO,
 					transition: GenesisTransition::new_cosigned(
 						vec![DUMMY_USER_KEY.public_key()],
 						Some(schnorr::Signature::from_slice(&[2u8; 64]).unwrap()),
@@ -1773,6 +1784,7 @@ mod test {
 			anchor_point: OutPoint::new(Txid::from_slice(&[1u8; 32]).unwrap(), 1),
 			genesis: Full {
 				items: vec![GenesisItem {
+					miner_fee: Amount::ZERO,
 					transition: GenesisTransition::new_cosigned(
 						vec![DUMMY_USER_KEY.public_key()],
 						Some(schnorr::Signature::from_slice(&[2u8; 64]).unwrap()),
@@ -1838,6 +1850,7 @@ mod test {
 			anchor_point: OutPoint::new(Txid::from_slice(&[1u8; 32]).unwrap(), 1),
 			genesis: Full {
 				items: vec![GenesisItem {
+					miner_fee: Amount::ZERO,
 					transition: GenesisTransition::new_cosigned(
 						vec![DUMMY_USER_KEY.public_key()],
 						Some(schnorr::Signature::from_slice(&[2u8; 64]).unwrap()),

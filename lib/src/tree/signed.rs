@@ -1049,7 +1049,7 @@ impl CachedSignedVtxoTree {
 		};
 
 		let fee_amount = Amount::ZERO;
-		GenesisItem {transition, output_idx, other_outputs, fee_amount }
+		GenesisItem {transition, output_idx, other_outputs, fee_amount, miner_fee: Amount::ZERO }
 	}
 
 	/// Construct the server vtxo at the given node index.

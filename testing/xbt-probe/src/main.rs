@@ -2,6 +2,7 @@
 use std::{env, io::{self, Read}};
 
 use ark::board::BoardBuilder;
+use ark::ProtocolEncoding;
 use ark::vtxo::policy::clause::{DelayedSignClause, TapScriptClause};
 use bitcoin::consensus::deserialize;
 use bitcoin::consensus::encode::serialize_hex;
@@ -124,13 +125,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let amount = funding.output[board_idx].value;
 	let fee = Amount::from_sat(2000);
 	let point = OutPoint::new(funding.compute_txid(), board_idx as u32);
-	let builder = builder.set_funding_details(amount, fee, point)?.generate_user_nonces();
-	let cosigner = BoardBuilder::new_for_cosign(user.public_key(), BlockHeight::new(1000),
-		server.public_key(), BlockDelta::new(6), amount, fee, point, *builder.user_pub_nonce());
+	let funded = args.get(1).map(String::as_str) == Some("funded");
+	let miner_fee = Amount::from_sat(500);
+	let builder = if funded {
+		builder.set_funded_funding_details(amount, fee, miner_fee, point)?
+	} else {
+		builder.set_funding_details(amount, fee, point)?
+	}.generate_user_nonces();
+	let cosigner = if funded {
+		BoardBuilder::new_for_funded_cosign(user.public_key(), BlockHeight::new(1000),
+			server.public_key(), BlockDelta::new(6), amount, fee, miner_fee, point,
+			*builder.user_pub_nonce())?
+	} else {
+		BoardBuilder::new_for_cosign(user.public_key(), BlockHeight::new(1000),
+			server.public_key(), BlockDelta::new(6), amount, fee, point, *builder.user_pub_nonce())
+	};
 	let response = cosigner.server_cosign(&server);
 	assert!(builder.verify_cosign_response(&response));
 	let vtxo = builder.build_vtxo(&response, &user)?;
 	vtxo.validate(&funding)?;
+	let restored = ark::Vtxo::<ark::vtxo::Full>::deserialize(&vtxo.serialize())?;
+	restored.validate(&funding)?;
+	assert_eq!(restored.transactions().collect::<Vec<_>>(), vtxo.transactions().collect::<Vec<_>>());
 	let board = vtxo.transactions().next().ok_or("missing exit")?.tx;
 	let mut cpfp = make_tx(OutPoint::new(board.compute_txid(), 1), Amount::from_sat(330), Sequence::MAX);
 	cpfp.input[0].witness = Witness::new(); // P2A, deliberately signature-free.

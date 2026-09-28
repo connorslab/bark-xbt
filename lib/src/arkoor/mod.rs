@@ -433,6 +433,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 			genesis: Full {
 				items: self.input.genesis.items.clone().into_iter().chain([
 					GenesisItem {
+						miner_fee: Amount::ZERO,
 						transition: GenesisTransition::new_arkoor(
 							vec![self.input.user_pubkey()],
 							self.input.policy().taproot(
@@ -483,6 +484,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 				genesis: Full {
 					items: self.input.genesis.items.iter().cloned().chain([
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -506,6 +508,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 							fee_amount: Amount::ZERO,
 						},
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								checkpoint_policy.taproot(
@@ -537,6 +540,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 				genesis: Full {
 					items: self.input.genesis.items.iter().cloned().chain([
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -601,6 +605,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 					items: self.input.genesis.items.iter().cloned().chain([
 						// Transition 1: input -> checkpoint
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -628,6 +633,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 						},
 						// Transition 2: checkpoint -> isolation fanout tx (final vtxo)
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								checkpoint_policy.taproot(
@@ -671,6 +677,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 					items: self.input.genesis.items.iter().cloned().chain([
 						// Transition 1: input -> arkoor tx (which includes isolation output)
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -695,6 +702,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 						},
 						// Transition 2: isolation output -> isolation fanout tx (final vtxo)
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								checkpoint_policy.taproot(
@@ -784,6 +792,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 				genesis: Full {
 					items: self.input.genesis.items.clone().into_iter().chain([
 						GenesisItem {
+							miner_fee: Amount::ZERO,
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input_tweak,

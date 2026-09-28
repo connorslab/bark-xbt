@@ -554,6 +554,9 @@ pub struct GenesisItem {
 	/// The fee to apply to the P2A (pay-to-anchor) output of the exit tx. Likely to be a value of
 	/// zero, however, fees for certain operations such as boarding can go here if applicable.
 	pub fee_amount: Amount,
+	/// Actual miner fee, separate from the value of the fee-bump output.
+	/// Older signed transactions have a zero miner fee.
+	pub miner_fee: Amount,
 }
 
 impl GenesisItem {
@@ -564,7 +567,7 @@ impl GenesisItem {
 
 	/// The total sum of sibling tx outputs including the P2A fee output.
 	pub fn other_output_sum(&self) -> Option<Amount> {
-		let mut result = self.fee_amount;
+		let mut result = self.fee_amount.checked_add(self.miner_fee)?;
 		for o in &self.other_outputs {
 			result = result.checked_add(o.value)?;
 		}

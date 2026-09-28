@@ -49,6 +49,7 @@ fn compute_exit_data(
 	exit_delta: BlockDelta,
 	amount: Amount,
 	fee: Amount,
+	miner_fee: Amount,
 	utxo: OutPoint,
 ) -> ExitData {
 	let combined_pubkey = musig::combine_keys([user_pubkey, server_pubkey])
@@ -62,7 +63,7 @@ fn compute_exit_data(
 	let exit_taproot = VtxoPolicy::new_pubkey(user_pubkey)
 		.taproot(server_pubkey, exit_delta, expiry_height);
 	let exit_txout = TxOut {
-		value: amount - fee,
+		value: amount - fee - miner_fee,
 		script_pubkey: exit_taproot.script_pubkey(),
 	};
 
@@ -77,6 +78,8 @@ fn compute_exit_data(
 
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum BoardFundingError {
+	#[error("funded exit needs a non-dust balance and anchor, and an individual relay fee")]
+	InsufficientExitReserve,
 	#[error("fee larger than amount: amount {amount}, fee {fee}")]
 	FeeHigherThanAmount {
 		amount: Amount,
@@ -186,6 +189,7 @@ pub struct BoardBuilder<S: BuilderState> {
 
 	amount: Option<Amount>,
 	fee: Option<Amount>,
+	miner_fee: Amount,
 	utxo: Option<OutPoint>,
 
 	user_pub_nonce: Option<musig::PublicNonce>,
@@ -217,6 +221,7 @@ impl<S: BuilderState> BoardBuilder<S> {
 			amount: self.amount,
 			utxo: self.utxo,
 			fee: self.fee,
+			miner_fee: self.miner_fee,
 			user_pub_nonce: self.user_pub_nonce,
 			user_sec_nonce: self.user_sec_nonce,
 			exit_data: self.exit_data,
@@ -241,6 +246,7 @@ impl BoardBuilder<state::Preparing> {
 			amount: None,
 			utxo: None,
 			fee: None,
+			miner_fee: Amount::ZERO,
 			user_pub_nonce: None,
 			user_sec_nonce: None,
 			exit_data: None,
@@ -267,7 +273,7 @@ impl BoardBuilder<state::Preparing> {
 
 		let exit_data = compute_exit_data(
 			self.user_pubkey, self.server_pubkey, self.expiry_height,
-			self.exit_delta, amount, fee, utxo,
+			self.exit_delta, amount, fee, Amount::ZERO, utxo,
 		);
 
 		self.amount = Some(amount);
@@ -276,6 +282,33 @@ impl BoardBuilder<state::Preparing> {
 		self.exit_data = Some(exit_data);
 
 		Ok(self.to_state())
+	}
+
+	/// Fund a new exit before either party generates signing nonces.
+	/// The anchor and actual miner fee are distinct, explicit deductions.
+	pub fn set_funded_funding_details(
+		self,
+		amount: Amount,
+		anchor: Amount,
+		miner_fee: Amount,
+		utxo: OutPoint,
+	) -> Result<BoardBuilder<state::CanGenerateNonces>, BoardFundingError> {
+		let deduction = anchor.checked_add(miner_fee)
+			.ok_or(BoardFundingError::FeeHigherThanAmount { amount, fee: Amount::MAX_MONEY })?;
+		let remaining = amount.checked_sub(deduction)
+			.ok_or(BoardFundingError::FeeHigherThanAmount { amount, fee: deduction })?;
+		if remaining < bitcoin_ext::P2TR_DUST || anchor < bitcoin_ext::P2TR_DUST
+			|| miner_fee < Amount::from_sat(125)
+		{
+			return Err(BoardFundingError::InsufficientExitReserve);
+		}
+		let mut builder = self.set_funding_details(amount, anchor, utxo)?;
+		builder.miner_fee = miner_fee;
+		builder.exit_data = Some(compute_exit_data(
+			builder.user_pubkey, builder.server_pubkey, builder.expiry_height,
+			builder.exit_delta, amount, anchor, miner_fee, utxo,
+		));
+		Ok(builder)
 	}
 }
 
@@ -338,13 +371,14 @@ impl BoardBuilder<state::ServerCanCosign> {
 		user_pub_nonce: musig::PublicNonce,
 	) -> BoardBuilder<state::ServerCanCosign> {
 		let exit_data = compute_exit_data(
-			user_pubkey, server_pubkey, expiry_height, exit_delta, amount, fee, utxo,
+			user_pubkey, server_pubkey, expiry_height, exit_delta, amount, fee, Amount::ZERO, utxo,
 		);
 
 		BoardBuilder {
 			user_pubkey, expiry_height, server_pubkey, exit_delta,
 			amount: Some(amount),
 			fee: Some(fee),
+			miner_fee: Amount::ZERO,
 			utxo: Some(utxo),
 			user_pub_nonce: Some(user_pub_nonce),
 			user_sec_nonce: None,
@@ -352,6 +386,24 @@ impl BoardBuilder<state::ServerCanCosign> {
 			signed_vtxo: None,
 			_state: PhantomData,
 		}
+	}
+
+	/// Reconstruct the funded transaction before the server co-signs it.
+	pub fn new_for_funded_cosign(
+		user_pubkey: PublicKey,
+		expiry_height: BlockHeight,
+		server_pubkey: PublicKey,
+		exit_delta: BlockDelta,
+		amount: Amount,
+		anchor: Amount,
+		miner_fee: Amount,
+		utxo: OutPoint,
+		user_pub_nonce: musig::PublicNonce,
+	) -> Result<Self, BoardFundingError> {
+		let mut builder = BoardBuilder::new(user_pubkey, expiry_height, server_pubkey, exit_delta)
+			.set_funded_funding_details(amount, anchor, miner_fee, utxo)?;
+		builder.user_pub_nonce = Some(user_pub_nonce);
+		Ok(builder.to_state())
 	}
 
 	/// This method is used by the server to cosign the board request.
@@ -407,13 +459,15 @@ impl BoardBuilder<state::ServerCanBuildVtxos> {
 		}
 
 		let fee = vtxo.genesis.items.first().unwrap().fee_amount;
+		let miner_fee = vtxo.genesis.items.first().unwrap().miner_fee;
 		let exit_data = compute_exit_data(
 			vtxo.user_pubkey(),
 			server_pubkey,
 			vtxo.expiry_height,
 			vtxo.exit_delta,
-			vtxo.amount() + fee,
+			vtxo.amount() + fee + miner_fee,
 			fee,
+			miner_fee,
 			vtxo.chain_anchor(),
 		);
 
@@ -430,8 +484,9 @@ impl BoardBuilder<state::ServerCanBuildVtxos> {
 		Ok(Self {
 			user_pub_nonce: None,
 			user_sec_nonce: None,
-			amount: Some(vtxo.amount() + fee),
+			amount: Some(vtxo.amount() + fee + miner_fee),
 			fee: Some(fee),
+			miner_fee,
 			user_pubkey: vtxo.user_pubkey(),
 			server_pubkey,
 			expiry_height: vtxo.expiry_height,
@@ -545,7 +600,8 @@ impl BoardBuilder<state::CanFinish> {
 
 		let amount = self.amount.expect("state invariant");
 		let fee = self.fee.expect("state invariant");
-		let vtxo_amount = amount.checked_sub(fee).expect("fee cannot exceed amount");
+		let vtxo_amount = amount.checked_sub(fee).and_then(|a| a.checked_sub(self.miner_fee))
+			.expect("funding deductions were checked before signing");
 
 		Ok(Vtxo {
 			amount: vtxo_amount,
@@ -555,6 +611,7 @@ impl BoardBuilder<state::CanFinish> {
 			anchor_point: self.utxo.expect("state invariant"),
 			genesis: Full {
 				items: vec![GenesisItem {
+					miner_fee: self.miner_fee,
 					transition: GenesisTransition::new_cosigned(
 						vec![self.user_pubkey, self.server_pubkey],
 						Some(final_sig),
@@ -584,6 +641,46 @@ mod test {
 	use crate::test_util::encoding_roundtrip;
 
 	use super::*;
+
+	#[test]
+	fn funded_board_recovery_accounting() {
+		let (old, _, user, server) = create_board_vtxo();
+		let new = || BoardBuilder::new(user.public_key(), old.expiry_height(),
+			server.public_key(), old.exit_delta());
+		let amount = Amount::from_sat(100_000);
+		let anchor = Amount::from_sat(330);
+		let miner_fee = Amount::from_sat(500);
+		let funding = Transaction {
+			version: transaction::Version::TWO,
+			lock_time: absolute::LockTime::ZERO,
+			input: vec![],
+			output: vec![TxOut { value: amount, script_pubkey: new().funding_script_pubkey() }],
+		};
+		let point = OutPoint::new(funding.compute_txid(), 0);
+		let builder = new().set_funded_funding_details(amount, anchor, miner_fee, point)
+			.unwrap().generate_user_nonces();
+		let cosigner = BoardBuilder::new_for_funded_cosign(user.public_key(), old.expiry_height(),
+			server.public_key(), old.exit_delta(), amount, anchor, miner_fee, point,
+			*builder.user_pub_nonce()).unwrap();
+		let response = cosigner.server_cosign(&server);
+		assert!(builder.verify_cosign_response(&response));
+		let vtxo = builder.build_vtxo(&response, &user).unwrap();
+		vtxo.validate(&funding).unwrap();
+		assert_eq!(vtxo.amount(), Amount::from_sat(99_170));
+		let tx = vtxo.transactions().next().unwrap().tx;
+		assert_eq!(amount - tx.output.iter().map(|o| o.value).sum::<Amount>(), miner_fee);
+		assert_eq!(tx.input[0].witness[0].len(), 65);
+		assert_eq!(tx.input[0].witness[0][64], 0x21);
+		encoding_roundtrip(&vtxo);
+		let rebuilt = BoardBuilder::new_from_vtxo(&vtxo, &funding, server.public_key()).unwrap();
+		assert_eq!(rebuilt.exit_txid(), tx.compute_txid());
+
+		// Invalid reserves fail before nonce generation or a funding commitment.
+		for (a, m) in [(0, 500), (330, 0), (100_000, 500), (u64::MAX, 500)] {
+			assert!(new().set_funded_funding_details(amount, Amount::from_sat(a),
+				Amount::from_sat(m), point).is_err());
+		}
+	}
 
 	#[test]
 	fn test_board_builder() {

@@ -90,6 +90,7 @@ fn build_internal_forfeit_vtxo(
 		genesis: Full {
 			items: vtxo.genesis.items.iter().cloned().chain([
 				GenesisItem {
+					miner_fee: Amount::ZERO,
 					transition: GenesisTransition::Arkoor(ArkoorGenesis {
 						client_cosigners: vec![vtxo.user_pubkey()],
 						tap_tweak: vtxo.output_taproot().tap_tweak(),
