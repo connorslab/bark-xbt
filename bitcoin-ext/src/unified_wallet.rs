@@ -126,6 +126,11 @@ mod tests {
 		assert_eq!(invalid, before);
 		let mut signed = psbt;
 		assert!(sign(&wallet, &mut signed).unwrap());
+		let satisfaction = wallet.public_descriptor(KeychainKind::External)
+			.max_weight_to_satisfy().unwrap() + bitcoin::Weight::from_wu(1);
+		let expected_weight = signed.unsigned_tx.weight()
+			+ satisfaction * signed.inputs.len() as u64 + bitcoin::Weight::from_wu(2);
+		assert_eq!(signed.clone().extract_tx().unwrap().weight(), expected_weight);
 		let prevouts = signed.inputs.iter().map(|p| p.witness_utxo.clone().unwrap()).collect::<Vec<_>>();
 		for (idx, input) in signed.inputs.iter().enumerate() {
 			let witness = input.final_script_witness.as_ref().unwrap();
