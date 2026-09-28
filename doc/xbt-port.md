@@ -73,9 +73,10 @@ attempts. It is not an exact chunk estimate and requires workload testing.
 Run the `XBT isolated validation` workflow in the private repository. The workflow
 uses the upstream Nix environment and records its tested commit in GitHub Actions.
 
-`testing/xbt_regtest.py` starts two temporary, disconnected localhost regtest
-nodes. It copies pre-activation blocks so both nodes possess identical funding
-outputs. It checks:
+The workflow runs Rust signature and wallet tests. `testing/xbt_regtest.py`
+starts two temporary, disconnected localhost regtest nodes. It copies
+pre-activation blocks so both nodes possess identical funding outputs.
+Together, these tests check:
 
 1. Unified digest results against Knots' standard reference vectors.
 2. Wallet unified signing and atomic rejection of legacy signature requests.
@@ -86,21 +87,22 @@ outputs. It checks:
 5. A real Ark BoardBuilder MuSig transaction, its CPFP child, and a delayed
    script-path exit claim with standard-transaction checks and explicit TRUC enforcement.
 
-These are **test assertions, not a statement that the latest run passed**.
-Consult the workflow result and `xbt-regtest-report.json` artifact. The report
+The September 28, 2026 run passed these checks at commit
+`1529339461a5d4e96574268ba9738bdfa5144e76`. See the
+[saved test report](test-results/README.md) and the workflow artifacts. The report
 contains transaction IDs and raw transactions using deterministic worthless
 test keys. Regtest transaction IDs are not public-chain payments.
 
 The workflow also builds the real client and server. It runs `xbt_lifecycle`
 through `just int`. That test covers a board, a refresh round, an out-of-round
 payment, an offboard, and an emergency exit with the server stopped. Its result
-is separate from the consensus probe. Check both results.
+is separate from the consensus probe. Both passed in the recorded run.
 
 ## Release gates
 
-Full client/server lifecycle, unilateral recovery after restart, hostile peers,
-reorganizations, mainnet coinbase maturity, fee bumping under load, Lightning hold-plugin interoperability,
-and all upstream tests remain separate gates. Upstream tests using the BTC
+Broader restart and recovery scenarios, hostile peers, reorganizations,
+mainnet coinbase maturity, fee bumping under load, Lightning hold-plugin
+interoperability, and all upstream tests remain separate gates. Upstream tests using the BTC
 bitcoinkernel and old signature fixtures are not XBT consensus tests; they must
 be ported without weakening their assertions. A library compile or passing
 digest vectors does not establish that the complete service is safe.

@@ -1,6 +1,6 @@
 # Paperclip Bark XBT — private experimental port
 
-**Regtest only. Incomplete and not suitable for real funds.**
+**Experimental, regtest only. Not suitable for real funds.**
 
 This repository preserves Second's Bark history and license. It is not an
 upstream Second release. Starting point: `3e1e4bf2e8594a1d1faa96dc953d0f8cd764ef8c`.
@@ -8,16 +8,24 @@ upstream Second release. Starting point: `3e1e4bf2e8594a1d1faa96dc953d0f8cd764ef
 The XBT port adds unified signature hashing, explicit 0x21 Ark witnesses,
 a fail-closed Taproot wallet signer, and Blake2b extended-header support.
 The client/server protocol uses a separate experimental version namespace.
-Mainnet wallet startup is disabled while integration validation is unfinished.
+Mainnet wallet startup remains disabled.
 The private Knots backend requires `mempooltruc=enforce` and
 `subdustfeepenalty=0`. Its default policy cannot relay all Bark exit packages.
 These transactions are not claimed to relay under unchanged Knots defaults.
 
 Upstream Bark uses Core 31 mempool chunks. This port adds a conservative
 individual-ancestor fee floor for Knots 29; it can cause extra fee-bump
-attempts and is not an exact chunk estimate. Full Lightning/hold-invoice integration, full lifecycle tests, fee policy,
-and recovery testing remain release gates. See CI for tested scope; a library
-check or digest test is not proof that the complete service works.
+attempts and is not an exact chunk estimate.
+
+Private regtest validation passed for boarding, refresh, out-of-round payment,
+cooperative withdrawal, and emergency recovery with the Ark server stopped.
+The consensus probe also confirmed unified transactions on XBT and rejected
+their replay on BTC. See the [test report](doc/test-results/README.md) and
+[implementation notes](doc/xbt-port.md).
+
+Lightning/hold-invoice interoperability, adversarial recovery and reorganization
+tests, mainnet maturity, and production relay-policy compatibility remain
+release gates. The full upstream test suite has not been validated for XBT.
 
 ---
 

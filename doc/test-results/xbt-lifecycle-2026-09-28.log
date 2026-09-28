@@ -1,0 +1,112 @@
+ASSUME_BUILT is set, skipping build
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+# `upgrade` is excluded like `tor`: it needs a release fetched up front.
+cargo nextest run --no-fail-fast --profile default --package ark-testing -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' --test bark xbt_lifecycle --test-threads 1
+   Compiling bitcoin v0.32.9 (/home/runner/work/bark-xbt/bark-xbt/vendor/bitcoin)
+   Compiling bark-runtime v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/bark-runtime)
+   Compiling bark-rest v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/bark-rest)
+   Compiling bdk_core v0.6.3
+   Compiling bitcoincore-rpc-json v0.19.0 (/home/runner/work/bark-xbt/bark-xbt/vendor/bitcoincore-rpc-json)
+   Compiling miniscript v12.3.6
+   Compiling bdk_chain v0.23.3
+   Compiling bitcoincore-rpc v0.19.0
+   Compiling corepc-types v0.13.0 (/home/runner/work/bark-xbt/bark-xbt/vendor/corepc-types)
+   Compiling lightning-types v0.3.1 (/home/runner/work/bark-xbt/bark-xbt/vendor/lightning-types)
+warning: unexpected `cfg` condition name: `fuzzing`
+  --> vendor/lightning-types/src/lib.rs:17:17
+   |
+17 | #![cfg_attr(not(fuzzing), deny(missing_docs))]
+   |                 ^^^^^^^
+   |
+   = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(fuzzing)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `fuzzing`
+   --> vendor/lightning-types/src/features.rs:813:7
+    |
+813 | #[cfg(fuzzing)]
+    |       ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(fuzzing)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition name: `fuzzing`
+   --> vendor/lightning-types/src/features.rs:820:11
+    |
+820 | #[cfg(not(fuzzing))]
+    |           ^^^^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(fuzzing)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `lightning-types` (lib) generated 3 warnings
+   Compiling lightning-invoice v0.34.0
+   Compiling bdk_bitcoind_rpc v0.22.0
+   Compiling bitcoind-async-client v0.15.0
+   Compiling bdk_wallet v3.1.0
+   Compiling bark-bitcoin-ext v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/bitcoin-ext)
+   Compiling lightning v0.2.2
+   Compiling esplora-client v0.12.3
+   Compiling bdk_esplora v0.22.2
+   Compiling bip321 v0.4.0 (/home/runner/work/bark-xbt/bark-xbt/bip321)
+   Compiling lnurl-rs v0.10.0
+   Compiling ark-lib v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/lib)
+warning: unused import: `bitcoin_ext::unified::UnifiedSighash`
+ --> lib/src/vtxo/policy/clause.rs:2:5
+  |
+2 | use bitcoin_ext::unified::UnifiedSighash;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `bitcoin_ext::unified::UnifiedSighash`
+  --> lib/src/vtxo/policy/mod.rs:29:5
+   |
+29 | use bitcoin_ext::unified::UnifiedSighash;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `ark-lib` (lib) generated 2 warnings (run `cargo fix --lib -p ark-lib` to apply 1 suggestion)
+   Compiling bark-server-rpc v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/server-rpc)
+   Compiling bark-cln-rpc v0.7.1+cln.26.06.7-hold (/home/runner/work/bark-xbt/bark-xbt/cln-rpc)
+   Compiling bark-wallet v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/bark)
+   Compiling bark-server-log v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/server-log)
+   Compiling bark-server v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/server)
+   Compiling bark-json v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/bark-json)
+warning: unused import: `ExitStateKind`
+  --> bark-json/src/cli/mod.rs:25:30
+   |
+25 | use crate::exit::{ExitState, ExitStateKind};
+   |                              ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `VtxoStateInfo`
+  --> bark-json/src/cli/mod.rs:26:42
+   |
+26 | use crate::primitives::{TransactionInfo, VtxoStateInfo, WalletVtxoInfo};
+   |                                          ^^^^^^^^^^^^^
+
+warning: `bark-json` (lib) generated 2 warnings (run `cargo fix --lib -p bark-json` to apply 2 suggestions)
+   Compiling bark-rest-client v0.7.1 (/home/runner/work/bark-xbt/bark-xbt/bark-rest-client)
+   Compiling ark-testing v0.0.0 (/home/runner/work/bark-xbt/bark-xbt/testing)
+    Finished `test` profile [unoptimized] target(s) in 2m 29s
+────────────
+ Nextest run ID 4c41d2f0-8284-426d-83f6-d437cddb8869 with nextest profile: default
+    Starting 1 test across 1 binary (193 tests skipped)
+        PASS [  21.608s] (1/1) ark-testing::bark xbt::xbt_lifecycle
+────────────
+     Summary [  21.610s] 1 test run: 1 passed, 193 skipped
