@@ -129,6 +129,8 @@ tracing-attributes = "0.1.31"
 [patch.crates-io]
 lightning-types = { path = "vendor/lightning-types" }
 bitcoin = { path = "vendor/bitcoin" }
+corepc-types = { path = "vendor/corepc-types" }
+bitcoincore-rpc-json = { path = "vendor/bitcoincore-rpc-json" }
 
 # Keep the large Lightning dependency inexpensive in the private test loop.
 [profile.dev.package.lightning]
