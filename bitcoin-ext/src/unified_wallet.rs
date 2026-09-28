@@ -112,13 +112,15 @@ mod tests {
 			.network(Network::Regtest).create_wallet_no_persist().unwrap();
 		insert_checkpoint(&mut wallet, BlockId { height: 1000, hash: BlockHash::all_zeros() });
 		receive_output_in_latest_block(&mut wallet, Amount::from_sat(100_000));
+		receive_output_in_latest_block(&mut wallet, Amount::from_sat(100_000));
 		let address = wallet.reveal_next_address(KeychainKind::External).address;
 		let mut builder = wallet.build_tx();
-		builder.add_recipient(address.script_pubkey(), Amount::from_sat(50_000));
+		builder.add_recipient(address.script_pubkey(), Amount::from_sat(150_000));
 		builder.fee_absolute(Amount::from_sat(1000));
 		let psbt = builder.finish().unwrap();
+		assert_eq!(psbt.inputs.len(), 2);
 		let mut invalid = psbt.clone();
-		invalid.inputs[0].sighash_type = Some(bitcoin::TapSighashType::Default.into());
+		invalid.inputs[1].sighash_type = Some(bitcoin::TapSighashType::Default.into());
 		let before = invalid.clone();
 		assert!(sign(&wallet, &mut invalid).is_err());
 		assert_eq!(invalid, before);
