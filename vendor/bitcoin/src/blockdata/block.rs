@@ -247,7 +247,8 @@ impl_consensus_encoding!(Block, header, txdata);
 impl Block {
     /// Returns the block hash.
     pub fn block_hash(&self) -> BlockHash {
-        if let Some(extra) = &self.blake2b { return extra.block_hash(self); } self.header.block_hash() }
+        self.header.block_hash()
+    }
 
     /// Checks if merkle root of header matches merkle root of the transaction list.
     pub fn check_merkle_root(&self) -> bool {
