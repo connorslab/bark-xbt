@@ -1,4 +1,4 @@
-"""Funded board recovery through a separate default-policy Knots relay.
+"""Funded board and repeated-payment recovery through a default-policy relay.
 
 This is a library-level experiment, not the full Bark wallet/server lifecycle.
 All keys and chains are disposable regtest fixtures.
@@ -23,7 +23,7 @@ def wait_for(check):
 
 def main():
     nodes = []
-    report = {"scope": "funded board recovery only; wallet integration pending",
+    report = {"scope": "funded board and repeated payments; wallet integration pending",
               "mainnet_sats_spent": 0, "complete_server_test": False}
     try:
         with tempfile.TemporaryDirectory(prefix="paperclip-default-policy-") as directory:
@@ -66,13 +66,20 @@ def main():
 
             # Signing finishes before any withdrawal is broadcast. No server
             # process or RPC participates in the following recovery steps.
-            txs = probe("funded", funding)
+            txs = probe("funded-transfer", funding)
             report["transactions"] = txs
             accepted = xbt.rpc("testmempoolaccept", [txs["board"]])[0]
             assert accepted["allowed"], accepted
             report["standalone_parent_acceptance"] = accepted
             board_id = xbt.rpc("sendrawtransaction", txs["board"])
             wait_for(lambda: board_id in relay.rpc("getrawmempool"))
+            parent_ids = [board_id]
+            for raw in txs["recovery_parents"][1:]:
+                check = xbt.rpc("testmempoolaccept", [raw])[0]
+                assert check["allowed"], check
+                parent_id = xbt.rpc("sendrawtransaction", raw)
+                wait_for(lambda: parent_id in relay.rpc("getrawmempool"))
+                parent_ids.append(parent_id)
 
             # The anchor is public. Another spender taking it must not remove
             # the user's already-funded recovery path.
@@ -89,7 +96,8 @@ def main():
             wait_for(lambda: claim_id in relay.rpc("getrawmempool"))
             blocks += relay.rpc("generatetoaddress", 1, miner)
             included = {txid for block in blocks for txid in relay.rpc("getblock", block)["tx"]}
-            assert {board_id, anchor_id, claim_id}.issubset(included)
+            assert set(parent_ids + [anchor_id, claim_id]).issubset(included)
+            report["confirmed_recovery_parents"] = parent_ids
             report["confirmed_txids"] = {"board": board_id, "anchor": anchor_id, "claim": claim_id}
             report["default_policy_peer_relay"] = True
             report["passed"] = True

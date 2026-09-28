@@ -169,6 +169,9 @@ pub struct TreeExitFunding {
 }
 
 impl TreeExitFunding {
+	pub fn anchor(self) -> Amount { self.anchor }
+	pub fn miner_fee(self) -> Amount { self.miner_fee }
+	pub fn per_transaction(self) -> Amount { self.anchor + self.miner_fee }
 	pub fn new(anchor: Amount, miner_fee: Amount) -> Result<Self, &'static str> {
 		// A four-way tree node and the supported hashlocked leaves are below
 		// 1,000 vbytes. Reserve at least this much for the 1 sat/vB profile.

@@ -127,6 +127,8 @@ pub use package::ArkoorPackageBuilder;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum ArkoorConstructionError {
+	#[error("funded exits require an entirely funded ancestor chain and explicit reserves")]
+	IncompatibleExitFunding,
 	#[error("Input amount of {input} does not match output amount of {output}")]
 	Unbalanced {
 		input: Amount,
@@ -209,6 +211,7 @@ pub struct ArkoorCosignResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArkoorCosignRequest<V> {
+	pub exit_funding: Option<crate::tree::signed::TreeExitFunding>,
 	pub user_pub_nonces: Vec<musig::PublicNonce>,
 	pub input: V,
 	pub outputs: Vec<ArkoorDestination>,
@@ -228,6 +231,7 @@ impl<V> ArkoorCosignRequest<V> {
 	) -> Self {
 		Self {
 			user_pub_nonces,
+			exit_funding: None,
 			input,
 			outputs,
 			isolated_outputs,
@@ -270,14 +274,16 @@ impl ArkoorCosignRequest<VtxoId> {
 			return Err("Input vtxo id does not match the provided vtxo id")
 		}
 
-		Ok(ArkoorCosignRequest::new_with_attestation(
+		let mut request = ArkoorCosignRequest::new_with_attestation(
 			self.user_pub_nonces,
 			vtxo,
 			self.outputs,
 			self.isolated_outputs,
 			self.use_checkpoint,
 			self.attestation,
-		))
+		);
+		request.exit_funding = self.exit_funding;
+		Ok(request)
 	}
 }
 
@@ -335,6 +341,7 @@ pub mod state {
 }
 
 pub struct ArkoorBuilder<S: state::BuilderState> {
+	exit_funding: Option<crate::tree::signed::TreeExitFunding>,
 	// These variables are provided by the user
 	/// The input vtxo to be spent
 	input: Vtxo<Full>,
@@ -391,6 +398,12 @@ pub struct ArkoorBuilder<S: state::BuilderState> {
 }
 
 impl<S: state::BuilderState> ArkoorBuilder<S> {
+	fn exit_anchor(&self) -> Amount {
+		self.exit_funding.map(|f| f.anchor()).unwrap_or(Amount::ZERO)
+	}
+	fn exit_miner_fee(&self) -> Amount {
+		self.exit_funding.map(|f| f.miner_fee()).unwrap_or(Amount::ZERO)
+	}
 	/// Access the input VTXO
 	pub fn input(&self) -> &Vtxo<Full> {
 		&self.input
@@ -423,7 +436,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 			.expect("called checkpoint_vtxo_at in context without checkpoints");
 
 		Vtxo {
-			amount: output.total_amount,
+			amount: checkpoint_tx.output[output_idx].value,
 			policy: ServerVtxoPolicy::new_checkpoint(self.input.user_pubkey()),
 			expiry_height: self.input.expiry_height,
 			server_pubkey: self.input.server_pubkey,
@@ -433,7 +446,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 			genesis: Full {
 				items: self.input.genesis.items.clone().into_iter().chain([
 					GenesisItem {
-						miner_fee: Amount::ZERO,
+						miner_fee: self.exit_miner_fee(),
 						transition: GenesisTransition::new_arkoor(
 							vec![self.input.user_pubkey()],
 							self.input.policy().taproot(
@@ -454,7 +467,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 								}
 							})
 							.collect(),
-						fee_amount: Amount::ZERO,
+						fee_amount: self.exit_anchor(),
 					},
 				]).collect(),
 			},
@@ -484,7 +497,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 				genesis: Full {
 					items: self.input.genesis.items.iter().cloned().chain([
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -505,10 +518,10 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 									}
 								})
 								.collect(),
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						},
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								checkpoint_policy.taproot(
@@ -520,7 +533,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 							),
 							output_idx: 0,
 							other_outputs: vec![],
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						}
 					]).collect(),
 				},
@@ -540,7 +553,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 				genesis: Full {
 					items: self.input.genesis.items.iter().cloned().chain([
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -561,7 +574,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 									}
 								})
 								.collect(),
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						}
 					]).collect(),
 				},
@@ -605,7 +618,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 					items: self.input.genesis.items.iter().cloned().chain([
 						// Transition 1: input -> checkpoint
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -629,11 +642,11 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 									}
 								})
 								.collect(),
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						},
 						// Transition 2: checkpoint -> isolation fanout tx (final vtxo)
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								checkpoint_policy.taproot(
@@ -656,7 +669,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 									}
 								})
 								.collect(),
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						},
 					]).collect(),
 				},
@@ -677,7 +690,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 					items: self.input.genesis.items.iter().cloned().chain([
 						// Transition 1: input -> arkoor tx (which includes isolation output)
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input.policy.taproot(
@@ -698,11 +711,11 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 									}
 								})
 								.collect(),
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						},
 						// Transition 2: isolation output -> isolation fanout tx (final vtxo)
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								checkpoint_policy.taproot(
@@ -723,7 +736,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 									}
 								})
 								.collect(),
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						},
 					]).collect(),
 				},
@@ -792,7 +805,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 				genesis: Full {
 					items: self.input.genesis.items.clone().into_iter().chain([
 						GenesisItem {
-							miner_fee: Amount::ZERO,
+							miner_fee: self.exit_miner_fee(),
 							transition: GenesisTransition::new_arkoor(
 								vec![self.input.user_pubkey()],
 								self.input_tweak,
@@ -808,7 +821,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 									}
 								})
 								.collect(),
-							fee_amount: Amount::ZERO,
+							fee_amount: self.exit_anchor(),
 						},
 					]).collect(),
 				},
@@ -886,6 +899,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 		input: &Vtxo<G>,
 		outputs: &[ArkoorDestination],
 		dust_isolation_amount: Option<Amount>,
+		exit_funding: Option<crate::tree::signed::TreeExitFunding>,
 	) -> Transaction {
 
 		// All outputs on the checkpoint transaction will use exactly the same policy.
@@ -904,7 +918,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 			}],
 			output: outputs.iter().map(|o| {
 				TxOut {
-					value: o.total_amount,
+					value: o.total_amount + exit_funding.map(|f| f.per_transaction()).unwrap_or(Amount::ZERO),
 					script_pubkey: checkpoint_spk.clone(),
 				}
 			})
@@ -915,7 +929,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 						script_pubkey: checkpoint_spk.clone(),
 					}
 				}))
-				.chain([fee::fee_anchor()]).collect()
+				.chain([fee::fee_anchor_with_amount(exit_funding.map(|f| f.anchor()).unwrap_or(Amount::ZERO))]).collect()
 		}
 	}
 
@@ -924,6 +938,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 		outputs: &[ArkoorDestination],
 		checkpoint_txid: Option<Txid>,
 		dust_isolation_amount: Option<Amount>,
+		exit_funding: Option<crate::tree::signed::TreeExitFunding>,
 	) -> Vec<Transaction> {
 
 		if let Some(checkpoint_txid) = checkpoint_txid {
@@ -947,7 +962,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 							input.exit_delta(),
 							input.expiry_height(),
 						),
-						fee::fee_anchor(),
+						fee::fee_anchor_with_amount(exit_funding.map(|f| f.anchor()).unwrap_or(Amount::ZERO)),
 					]
 				};
 				arkoor_txs.push(transaction);
@@ -984,7 +999,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 						value: amt,
 						script_pubkey: checkpoint_spk.clone(),
 					}))
-					.chain([fee::fee_anchor()])
+					.chain([fee::fee_anchor_with_amount(exit_funding.map(|f| f.anchor()).unwrap_or(Amount::ZERO))])
 					.collect()
 			};
 			vec![transaction]
@@ -1031,6 +1046,8 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 		input: &Vtxo<G>,
 		outputs: &[ArkoorDestination],
 		isolation_outputs: &[ArkoorDestination],
+		use_checkpoint: bool,
+		exit_funding: Option<crate::tree::signed::TreeExitFunding>,
 	) -> Result<(), ArkoorConstructionError> {
 
 		// Check if inputs and outputs are balanced
@@ -1045,6 +1062,16 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 			.checked_sum()
 			.ok_or(ArkoorConstructionError::Overflow)?;
 
+		let reserves = if let Some(profile) = exit_funding {
+			if !isolation_outputs.is_empty() || outputs.iter().any(|o| o.total_amount < P2TR_DUST) {
+				return Err(ArkoorConstructionError::Dust);
+			}
+			if outputs.len() > 16 { return Err(ArkoorConstructionError::TooManyOutputs); }
+			let count = if use_checkpoint { outputs.len().saturating_add(1) } else { 1 };
+			profile.per_transaction().checked_mul(count as u64)
+				.ok_or(ArkoorConstructionError::Overflow)?
+		} else { Amount::ZERO };
+		let output_amount = output_amount.checked_add(reserves).ok_or(ArkoorConstructionError::Overflow)?;
 		if input_amount != output_amount {
 			return Err(ArkoorConstructionError::Unbalanced {
 				input: input_amount,
@@ -1119,6 +1146,7 @@ impl<S: state::BuilderState> ArkoorBuilder<S> {
 
 	fn to_state<S2: state::BuilderState>(self) -> ArkoorBuilder<S2> {
 		ArkoorBuilder {
+			exit_funding: self.exit_funding,
 			input: self.input,
 			outputs: self.outputs,
 			isolated_outputs: self.isolated_outputs,
@@ -1235,8 +1263,29 @@ impl ArkoorBuilder<state::Initial> {
 		isolated_outputs: Vec<ArkoorDestination>,
 		use_checkpoint: bool,
 	) -> Result<Self, ArkoorConstructionError> {
+		Self::new_with_profile(input, outputs, isolated_outputs, use_checkpoint, None)
+	}
+
+	/// Explicitly allocate recovery fees without reducing agreed recipient amounts.
+	pub fn new_funded(
+		input: Vtxo<Full>, outputs: Vec<ArkoorDestination>, use_checkpoint: bool,
+		funding: crate::tree::signed::TreeExitFunding,
+	) -> Result<Self, ArkoorConstructionError> {
+		Self::new_with_profile(input, outputs, vec![], use_checkpoint, Some(funding))
+	}
+
+	fn new_with_profile(
+		input: Vtxo<Full>, outputs: Vec<ArkoorDestination>, isolated_outputs: Vec<ArkoorDestination>,
+		use_checkpoint: bool, exit_funding: Option<crate::tree::signed::TreeExitFunding>,
+	) -> Result<Self, ArkoorConstructionError> {
+		let any_funded = input.genesis.items.iter().any(|i| i.miner_fee != Amount::ZERO);
+		let all_funded = !input.genesis.items.is_empty()
+			&& input.genesis.items.iter().all(|i| i.miner_fee != Amount::ZERO);
+		if (any_funded && exit_funding.is_none()) || (exit_funding.is_some() && !all_funded) {
+			return Err(ArkoorConstructionError::IncompatibleExitFunding);
+		}
 		// Do some validation on the amounts
-		Self::validate_amounts(&input, &outputs, &isolated_outputs)?;
+		Self::validate_amounts(&input, &outputs, &isolated_outputs, use_checkpoint, exit_funding)?;
 
 		// Compute combined dust amount if dust isolation is needed
 		let combined_dust_amount = if !isolated_outputs.is_empty() {
@@ -1251,6 +1300,7 @@ impl ArkoorBuilder<state::Initial> {
 				&input,
 				&outputs,
 				combined_dust_amount,
+				exit_funding,
 			);
 			let txid = tx.compute_txid();
 			Some((tx, txid))
@@ -1264,6 +1314,7 @@ impl ArkoorBuilder<state::Initial> {
 			&outputs,
 			unsigned_checkpoint_tx.as_ref().map(|t| t.1),
 			combined_dust_amount,
+			exit_funding,
 		);
 
 		// Construct dust fanout tx if dust isolation is needed
@@ -1335,6 +1386,7 @@ impl ArkoorBuilder<state::Initial> {
 
 		Ok(Self {
 			input: input,
+			exit_funding,
 			outputs: outputs,
 			isolated_outputs,
 			sighashes: sighashes,
@@ -1443,11 +1495,12 @@ impl<'a> ArkoorBuilder<state::ServerCanCosign> {
 		cosign_request.verify_attestation()
 			.map_err(ArkoorSigningError::InvalidAttestation)?;
 
-		let ret = ArkoorBuilder::new(
+		let ret = ArkoorBuilder::new_with_profile(
 			cosign_request.input,
 			cosign_request.outputs,
 			cosign_request.isolated_outputs,
 			cosign_request.use_checkpoint,
+			cosign_request.exit_funding,
 		)
 			.map_err(ArkoorSigningError::ArkoorConstructionError)?
 			.set_user_pub_nonces(cosign_request.user_pub_nonces.clone())?;
@@ -1513,14 +1566,16 @@ impl ArkoorBuilder<state::UserGeneratedNonces> {
 	}
 
 	pub fn cosign_request(&self) -> ArkoorCosignRequest<Vtxo<Full>> {
-		ArkoorCosignRequest::new(
+		let mut request = ArkoorCosignRequest::new(
 			self.user_pub_nonces().to_vec(),
 			self.input.clone(),
 			self.outputs.clone(),
 			self.isolated_outputs.clone(),
 			self.checkpoint_data.is_some(),
 			self.user_keypair.as_ref().expect("State invariant"),
-		)
+		);
+		request.exit_funding = self.exit_funding;
+		request
 	}
 
 	fn validate_server_cosign_response(

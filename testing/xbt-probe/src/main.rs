@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let amount = funding.output[board_idx].value;
 	let fee = Amount::from_sat(2000);
 	let point = OutPoint::new(funding.compute_txid(), board_idx as u32);
-	let funded = args.get(1).map(String::as_str) == Some("funded");
+	let funded = args.get(1).is_some_and(|m| m.starts_with("funded"));
 	let miner_fee = Amount::from_sat(500);
 	let builder = if funded {
 		builder.set_funded_funding_details(amount, fee, miner_fee, point)?
@@ -142,24 +142,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	};
 	let response = cosigner.server_cosign(&server);
 	assert!(builder.verify_cosign_response(&response));
-	let vtxo = builder.build_vtxo(&response, &user)?;
+	let mut vtxo = builder.build_vtxo(&response, &user)?;
 	vtxo.validate(&funding)?;
+	let mut claim_key = user;
+	if args.get(1).map(String::as_str) == Some("funded-transfer") {
+		let bob = Keypair::from_secret_key(&ark::SECP, &SecretKey::from_slice(&[6; 32])?);
+		let profile = ark::tree::signed::TreeExitFunding::new(Amount::from_sat(330), Amount::from_sat(1000))?;
+		for (recipient, payment) in [(bob, Amount::from_sat(50_000)), (user, Amount::from_sat(30_000))] {
+			let outputs = vec![
+				ark::arkoor::ArkoorDestination { total_amount: payment,
+					policy: ark::VtxoPolicy::new_pubkey(recipient.public_key()) },
+				ark::arkoor::ArkoorDestination { total_amount: vtxo.amount() - payment - profile.per_transaction() * 3,
+					policy: ark::VtxoPolicy::new_pubkey(claim_key.public_key()) },
+			];
+			let builder = ark::arkoor::ArkoorBuilder::new_funded(vtxo, outputs, true, profile)?
+				.generate_user_nonces(claim_key);
+			let cosigner = ark::arkoor::ArkoorBuilder::from_cosign_request(builder.cosign_request())?
+				.server_cosign(&server)?;
+			vtxo = builder.user_cosign(&claim_key, &cosigner.cosign_response())?
+				.build_signed_vtxos().into_iter().next().ok_or("missing payment output")?;
+			vtxo.validate(&funding)?;
+			claim_key = recipient;
+		}
+	}
 	let restored = ark::Vtxo::<ark::vtxo::Full>::deserialize(&vtxo.serialize())?;
 	restored.validate(&funding)?;
 	assert_eq!(restored.transactions().collect::<Vec<_>>(), vtxo.transactions().collect::<Vec<_>>());
 	let board = vtxo.transactions().next().ok_or("missing exit")?.tx;
+	let final_tx = vtxo.transactions().last().ok_or("missing final exit")?.tx;
 	let mut cpfp = make_tx(OutPoint::new(board.compute_txid(), 1), Amount::from_sat(330), Sequence::MAX);
 	cpfp.input[0].witness = Witness::new(); // P2A, deliberately signature-free.
-	let mut claim = make_tx(OutPoint::new(board.compute_txid(), 0),
-		board.output[0].value - Amount::from_sat(700), Sequence(6));
-	let clause = DelayedSignClause { pubkey: user.public_key(), block_delta: BlockDelta::new(6) };
+	let mut claim = make_tx(vtxo.point(),
+		vtxo.amount() - Amount::from_sat(700), Sequence(6));
+	let clause = DelayedSignClause { pubkey: claim_key.public_key(), block_delta: BlockDelta::new(6) };
 	let script = clause.tapscript();
-	let hash = unified::digest(&claim, 0, &[board.output[0].clone()], unified::ALL,
+	let hash = unified::digest(&claim, 0, &[final_tx.output[vtxo.point().vout as usize].clone()], unified::ALL,
 		Execution { script_type: 3, script_code: None, annex: None,
 			leaf: Some((bitcoin::TapLeafHash::from_script(&script, bitcoin::taproot::LeafVersion::TapScript), u32::MAX)) })?;
-	let sig = ark::SECP.sign_schnorr(&hash.into(), &user);
+	let sig = ark::SECP.sign_schnorr(&hash.into(), &claim_key);
 	claim.input[0].witness = clause.witness(&sig, &clause.control_block(&vtxo));
 	println!("{}", json!({"key": serialize_hex(&key_tx), "legacy": serialize_hex(&legacy),
-		"board": serialize_hex(&board), "cpfp": serialize_hex(&cpfp), "claim": serialize_hex(&claim)}));
+		"board": serialize_hex(&board), "cpfp": serialize_hex(&cpfp), "claim": serialize_hex(&claim),
+		"recovery_parents": vtxo.transactions().map(|t| serialize_hex(&t.tx)).collect::<Vec<_>>() }));
 	Ok(())
 }

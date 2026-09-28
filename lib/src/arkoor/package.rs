@@ -37,6 +37,7 @@ impl<V> ArkoorPackageCosignRequest<V> {
 		ArkoorPackageCosignRequest {
 			requests: self.requests.into_iter().map(|r| {
 				ArkoorCosignRequest {
+					exit_funding: r.exit_funding,
 					user_pub_nonces: r.user_pub_nonces,
 					input: f(r.input),
 					outputs: r.outputs,
@@ -85,6 +86,7 @@ impl ArkoorPackageCosignRequest<VtxoId> {
 				}
 
 				Ok(ArkoorCosignRequest {
+					exit_funding: r.exit_funding,
 					input: vtxo,
 					user_pub_nonces: r.user_pub_nonces,
 					outputs: r.outputs,

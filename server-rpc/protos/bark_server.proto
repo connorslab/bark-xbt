@@ -247,6 +247,11 @@ message ArkoorDestination {
 	bytes policy = 2;
 }
 
+message ExitFunding {
+	uint64 anchor_sat = 1;
+	uint64 miner_fee_sat = 2;
+}
+
 message ArkoorCosignRequest {
 	bytes input_vtxo_id = 1;
 	repeated ArkoorDestination outputs = 2;
@@ -255,6 +260,7 @@ message ArkoorCosignRequest {
 	repeated ArkoorDestination isolated_outputs = 4;
 	bool use_checkpoint = 5;
 	bytes attestation = 6;
+	ExitFunding exit_funding = 7;
 }
 
 message ArkoorPackageCosignRequest {

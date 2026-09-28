@@ -610,6 +610,9 @@ impl From<ark::integration::TokenStatus> for protos::intman::TokenStatus {
 impl<V: VtxoRef> From<ArkoorCosignRequest<V>> for protos::ArkoorCosignRequest {
 	fn from(v: ArkoorCosignRequest<V>) -> Self {
 		Self {
+			exit_funding: v.exit_funding.map(|f| protos::ExitFunding {
+				anchor_sat: f.anchor().to_sat(), miner_fee_sat: f.miner_fee().to_sat(),
+			}),
 			input_vtxo_id: v.input.vtxo_id().serialize(),
 			user_pub_nonces: v.user_pub_nonces.into_iter()
 				.map(|n| n.serialize().to_vec())
@@ -628,7 +631,7 @@ impl<V: VtxoRef> From<ArkoorCosignRequest<V>> for protos::ArkoorCosignRequest {
 impl TryFrom<protos::ArkoorCosignRequest> for ArkoorCosignRequest<VtxoId> {
 	type Error = ConvertError;
 	fn try_from(v: protos::ArkoorCosignRequest) -> Result<Self, Self::Error> {
-		let req = Self::new_with_attestation(
+		let mut req = Self::new_with_attestation(
 			v.user_pub_nonces.into_iter()
 				.map(|n| musig::PublicNonce::from_bytes(&n))
 				.collect::<Result<Vec<_>, _>>()?,
@@ -643,6 +646,9 @@ impl TryFrom<protos::ArkoorCosignRequest> for ArkoorCosignRequest<VtxoId> {
 			ArkoorCosignAttestation::deserialize(&v.attestation)
 				.map_err(|_| "Failed to parse attestation")?,
 		);
+		req.exit_funding = v.exit_funding.map(|f| ark::tree::signed::TreeExitFunding::new(
+			Amount::from_sat(f.anchor_sat), Amount::from_sat(f.miner_fee_sat),
+		)).transpose()?;
 		Ok(req)
 	}
 }
