@@ -6357,6 +6357,8 @@ dependencies = [
  "ark-lib",
  "bark-bitcoin-ext",
  "bitcoin",
+ "lightning-invoice",
+ "lightning-types",
  "serde_json",
 ]
 
