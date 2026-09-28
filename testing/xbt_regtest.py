@@ -108,6 +108,11 @@ def main():
             assert parsed_block["hash"] == header_hash, parsed_block
             assert parsed_block["roundtrip"] == raw_block
             report["full_block_roundtrip"] = True
+            variants = probe("header-variants", raw_header)
+            for variant in variants:
+                xbt.rpc("submitheader", variant["hex"])
+                assert xbt.rpc("getblockheader", variant["hash"], False) == variant["hex"]
+            report["extended_header_variants_verified"] = len(variants)
             transactions = probe("sign", funding)
             # Both nodes have exactly the same funding outpoints. Prove the
             # negative replay result is a signature failure, not missing coins.

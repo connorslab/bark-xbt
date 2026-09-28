@@ -61,6 +61,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		return Ok(());
 	}
 	let mut input = String::new(); io::stdin().read_to_string(&mut input)?;
+	if args.get(1).map(String::as_str) == Some("header-variants") {
+		let base: bitcoin::block::Header = deserialize(&Vec::<u8>::from_hex(input.trim())?)?;
+		let mut variants = Vec::new();
+		for flags in 0u8..8 {
+			for clear in [0, 7, 8, 255] {
+				let mut header = base;
+				let extra = header.blake2b.as_mut().ok_or("missing extended header")?;
+				extra.flags = flags;
+				extra.time_offset = 5;
+				extra.nonce2 = 9;
+				extra.nonce3 = 8;
+				extra.extranonce = [9; 16];
+				extra.xor_key = [7; 16];
+				extra.xor_mask_clear_bits = clear;
+				extra.merge_mining_rhs = [6; 32];
+				header.nonce = 0;
+				while header.validate_pow(header.target()).is_err() {
+					header.nonce = header.nonce.checked_add(1).ok_or("nonce overflow")?;
+					assert!(header.nonce < 1000, "regtest-only header probe");
+				}
+				variants.push(json!({"hash": header.block_hash().to_string(), "hex": serialize_hex(&header), "flags": flags, "clear": clear}));
+			}
+		}
+		println!("{}", json!(variants));
+		return Ok(());
+	}
 	if args.get(1).map(String::as_str) == Some("block") {
 		let raw = Vec::<u8>::from_hex(input.trim())?;
 		let block: bitcoin::Block = deserialize(&raw)?;
