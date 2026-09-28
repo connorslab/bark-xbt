@@ -42,6 +42,7 @@ impl ProgressStep {
 						ExitTxStatus::VerifyInputs => true,
 						ExitTxStatus::AwaitingInputConfirmation { .. } => false,
 						ExitTxStatus::AwaitingCpfpBroadcast => false,
+						ExitTxStatus::AwaitingParentConfirmation | ExitTxStatus::ParentConfirmed { .. } => false,
 						ExitTxStatus::AwaitingConfirmation { .. } => false,
 						// We don't need to handle the case when every transaction is confirmed as
 						// we should no longer be in this state
@@ -148,7 +149,16 @@ impl<'a> ProgressContext<'a> {
 				})
 			}
 		} else {
-			Ok(ExitTxStatus::AwaitingCpfpBroadcast)
+			// A funded parent can relay and confirm without anyone spending its anchor.
+			// Query the chain directly: the package cache historically tracks the child.
+			match self.wallet.inner.chain.tx_status(exit.txid).await
+				.map_err(|e| ExitError::TransactionRetrievalFailure {
+					txid: exit.txid, error: e.to_string(),
+				})? {
+				TxStatus::Confirmed(block) => Ok(ExitTxStatus::ParentConfirmed { block }),
+				TxStatus::Mempool => Ok(ExitTxStatus::AwaitingParentConfirmation),
+				TxStatus::NotFound => Ok(ExitTxStatus::AwaitingCpfpBroadcast),
+			}
 		}
 	}
 

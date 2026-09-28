@@ -22,6 +22,12 @@ pub enum ExitTxStatus {
 		txids: HashSet<Txid>
 	},
 	AwaitingCpfpBroadcast,
+	/// The parent is in the mempool without a known fee-bumping child.
+	AwaitingParentConfirmation,
+	/// The parent itself confirmed; no child is needed to complete this step.
+	ParentConfirmed {
+		block: BlockRef,
+	},
 	AwaitingConfirmation {
 		child_txid: Txid,
 		origin: ExitTxOrigin,
@@ -44,7 +50,7 @@ impl ExitTxStatus {
 
 	pub fn confirmed_in(&self) -> Option<&BlockRef> {
 		match self {
-			ExitTxStatus::Confirmed { block, .. } => Some(block),
+			ExitTxStatus::Confirmed { block, .. } | ExitTxStatus::ParentConfirmed { block } => Some(block),
 			_ => None,
 		}
 	}

@@ -267,6 +267,7 @@ impl ExitState {
 				s.transactions.iter().any(|s| match s.status {
 					ExitTxStatus::AwaitingInputConfirmation { .. } => true,
 					ExitTxStatus::AwaitingConfirmation { .. } => true,
+					ExitTxStatus::AwaitingParentConfirmation => true,
 					_ => false,
 				})
 			},
@@ -373,6 +374,24 @@ mod test {
 			ExitState::new_vtxo_swept(tip, vec![OutPoint::new(txid(1), 0)]),
 			ExitState::new_canceled(tip),
 		]
+	}
+
+	#[test]
+	fn funded_parent_progress_survives_serialization() {
+		let tip = BlockHeight::new(100);
+		let block = BlockRef { height: tip, hash: bitcoin::BlockHash::all_zeros() };
+		for status in [ExitTxStatus::AwaitingParentConfirmation, ExitTxStatus::ParentConfirmed { block }] {
+			let confirmed = status.confirmed_in().is_some();
+			assert!(status.child_txid().is_none());
+			let state = ExitState::new_processing_from_transactions(tip, vec![tx(1, status)]);
+			let restored: ExitState = serde_json::from_slice(&serde_json::to_vec(&state).unwrap()).unwrap();
+			assert_eq!(state, restored);
+			assert!(!restored.is_cancelable());
+			assert_eq!(restored.requires_confirmations(), !confirmed);
+			let ExitState::Processing(s) = restored else { unreachable!() };
+			assert_eq!(crate::exit::progress::util::count_broadcast(&s.transactions), 1);
+			assert_eq!(crate::exit::progress::util::count_confirmed(&s.transactions), usize::from(confirmed));
+		}
 	}
 
 	#[test]

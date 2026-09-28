@@ -28,6 +28,10 @@ pub enum ExitTxStatus {
 		txids: HashSet<Txid>
 	},
 	AwaitingCpfpBroadcast,
+	AwaitingParentConfirmation,
+	ParentConfirmed {
+		block: BlockRef,
+	},
 	AwaitingConfirmation {
 		#[cfg_attr(feature = "utoipa", schema(value_type = String))]
 		child_txid: Txid,
@@ -50,6 +54,8 @@ impl fmt::Display for ExitTxStatus {
 impl From<bark::exit::ExitTxStatus> for ExitTxStatus {
 	fn from(v: bark::exit::ExitTxStatus) -> Self {
 		match v {
+			bark::exit::ExitTxStatus::AwaitingParentConfirmation => Self::AwaitingParentConfirmation,
+			bark::exit::ExitTxStatus::ParentConfirmed { block } => Self::ParentConfirmed { block: block.into() },
 			bark::exit::ExitTxStatus::VerifyInputs => {
 				ExitTxStatus::VerifyInputs
 			},

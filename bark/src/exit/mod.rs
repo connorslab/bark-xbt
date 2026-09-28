@@ -1117,7 +1117,7 @@ impl Exit {
 						// one. Confirmation is read from tracked state, so no chain query is needed.
 						for exit_tx in &s.transactions {
 							let child = match &exit_tx.status {
-								ExitTxStatus::Confirmed { .. } => continue,
+								ExitTxStatus::Confirmed { .. } | ExitTxStatus::ParentConfirmed { .. } => continue,
 								ExitTxStatus::AwaitingConfirmation { .. } => {
 									match guard.tx_manager.get_child_status(exit_tx.txid).await {
 										Ok(Some(c)) => ChildState::InMempool(c.fee_info),
@@ -1125,6 +1125,7 @@ impl Exit {
 									}
 								},
 								ExitTxStatus::VerifyInputs |
+								ExitTxStatus::AwaitingParentConfirmation |
 								ExitTxStatus::AwaitingCpfpBroadcast |
 								ExitTxStatus::AwaitingInputConfirmation { .. } => ChildState::Missing,
 							};

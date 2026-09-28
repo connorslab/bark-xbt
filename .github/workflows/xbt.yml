@@ -89,6 +89,8 @@ jobs:
       - name: Build Bark client and server binaries
         timeout-minutes: 25
         run: nix develop --command cargo build -p bark-cli -p bark-server --bins 2>&1 | tee binary-build.log
+      - name: Check standalone parent recovery states
+        run: nix develop --command cargo test -p bark-wallet funded_parent_progress_survives_serialization
       - uses: actions/upload-artifact@v4
         if: always()
         with:

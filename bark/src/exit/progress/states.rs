@@ -171,6 +171,10 @@ async fn progress_exit_tx(
 	ctx: &mut ProgressContext<'_>,
 ) -> anyhow::Result<ExitTxStatus, ExitError> {
 	match &exit.status {
+		ExitTxStatus::AwaitingParentConfirmation | ExitTxStatus::ParentConfirmed { .. } => {
+			// Re-check on every progress pass, including after eviction or a reorg.
+			ctx.get_exit_tx_status(exit).await
+		},
 		ExitTxStatus::VerifyInputs => {
 			debug!("Verifying inputs for exit tx {}", exit.txid);
 			let inputs = ctx.get_unique_inputs(exit.txid).await?;

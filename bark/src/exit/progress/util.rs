@@ -12,6 +12,7 @@ pub(crate) fn format_outpoints(outpoints: &[OutPoint]) -> String {
 /// Counts how many of the given ExitTx objects exist in either the mempool or the blockchain
 pub(crate) fn count_broadcast(status: &[ExitTx]) -> usize {
 	status.iter().filter(|s| match s.status {
+		ExitTxStatus::AwaitingParentConfirmation | ExitTxStatus::ParentConfirmed { .. } => true,
 		ExitTxStatus::AwaitingConfirmation { .. } => true,
 		ExitTxStatus::Confirmed { .. } => true,
 		_ => false,
@@ -22,6 +23,7 @@ pub(crate) fn count_broadcast(status: &[ExitTx]) -> usize {
 /// Counts how many of the given ExitTx objects are confirmed in the blockchain
 pub(crate) fn count_confirmed(status: &[ExitTx]) -> usize {
 	status.iter().filter(|s| match s.status {
+		ExitTxStatus::ParentConfirmed { .. } => true,
 		ExitTxStatus::Confirmed { .. } => true,
 		_ => false,
 	}).count()

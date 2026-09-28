@@ -243,11 +243,13 @@ impl ExitTransactionManager {
 						// transaction may exist in the mempool or in a confirmed block.
 						// We will skip this step once a transaction is deeply confirmed.
 						trace!("Attempting to update child status from network for exit tx {}", txid);
-						let status = self.update_package_from_network(
+						self.update_package_from_network(
 							&package,
 							status.confirmed_height().unwrap_or(tip),
 							broadcast_local,
 						).await?;
+						// The anchor may be unspent even when the parent is confirmed.
+						// Preserve the parent's observed status independently of its child.
 						self.status.insert(txid, status);
 					},
 				}
