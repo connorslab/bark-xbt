@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Private integration fixture only. Do not use with an existing data directory.
+set -euo pipefail
+: "${XBT_BITCOIND:?set XBT_BITCOIND to the verified Knots test binary}"
+for arg in "$@"; do
+    if [[ "$arg" == "--version" ]]; then
+        exec "$XBT_BITCOIND" "$@"
+    fi
+done
+# Refuse accidental use outside regtest; do not infer a network from a config.
+case " $* " in
+    *" -regtest "*|*" -regtest=1 "*) ;;
+    *) echo 'XBT fixture requires explicit -regtest' >&2; exit 1 ;;
+esac
+exec "$XBT_BITCOIND" "$@" -testactivationheight=blake2b@100 \
+    -acceptnonstdtxn=0 -dnsseed=0 -discover=0

@@ -15,7 +15,8 @@ jobs:
             accept-flake-config = true
       - name: Confirm upstream development environment
         run: nix develop --command bash -c 'echo "IN_NIX_SHELL=$IN_NIX_SHELL"; command -v cargo; command -v bitcoind; command -v just'
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: rust-cache
         with:
           path: |
             target
@@ -42,6 +43,15 @@ jobs:
       - name: Check wallet and server
         if: ${{ !cancelled() }}
         run: nix develop --command cargo check -p bark-wallet -p bark-server
+      - name: Preserve build cache after test failures
+        if: ${{ !cancelled() && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
