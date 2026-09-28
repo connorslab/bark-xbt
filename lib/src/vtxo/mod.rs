@@ -1549,6 +1549,31 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn funded_encoding_preserves_legacy_genesis() {
+		let vtxo = &VTXO_VECTORS.board_vtxo;
+		let original = vtxo.transactions().collect::<Vec<_>>();
+		for version in [2, 3] {
+			let mut bytes = Vec::new();
+			Full::encode(&vtxo.genesis, &mut bytes, version).unwrap();
+			let decoded = Full::decode(&mut bytes.as_slice(), version).unwrap();
+			assert!(decoded.items.iter().all(|g| g.miner_fee == Amount::ZERO));
+			let mut restored = vtxo.clone();
+			restored.genesis = decoded;
+			assert_eq!(restored.transactions().collect::<Vec<_>>(), original);
+		}
+		let mut funded = vtxo.genesis.clone();
+		funded.items[0].miner_fee = Amount::from_sat(500);
+		assert!(Full::encode(&funded, &mut Vec::new(), 2).is_err());
+		let mut encoded = Vec::new();
+		Full::encode(&funded, &mut encoded, 3).unwrap();
+		assert_eq!(Full::decode(&mut encoded.as_slice(), 3).unwrap().items[0].miner_fee,
+			Amount::from_sat(500));
+		for len in 0..encoded.len() {
+			assert!(Full::decode(&mut &encoded[..len], 3).is_err());
+		}
+	}
+
+	#[test]
 	fn test_generate_vtxo_vectors() {
 		let g = generate_vtxo_vectors();
 		// the generation code prints its inner values
