@@ -285,6 +285,16 @@ impl Invoice {
 		}
 	}
 
+	/// Require the signed XBT identity before any payment is authorized.
+	pub fn require_xbt(&self) -> Result<(), CheckSignatureError> {
+		let required = match self {
+			Invoice::Bolt11(i) => i.features().is_some_and(|f| f.requires_blake2b_identity()),
+			Invoice::Bolt12(i) => i.invoice_features().requires_blake2b_identity(),
+		};
+		if !required { return Err(CheckSignatureError("missing required XBT identity bit 512".into())); }
+		Ok(())
+	}
+
 	pub fn check_signature(&self) -> Result<(), CheckSignatureError> {
 		match self {
 			Invoice::Bolt11(invoice) => invoice

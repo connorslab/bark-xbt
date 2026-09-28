@@ -244,6 +244,7 @@ impl LightningManager {
 		user_fee: Amount,
 		attempt_block_height: BlockHeight,
 	) -> anyhow::Result<()> {
+		invoice.require_xbt()?;
 		invoice.check_signature().context("invalid invoice signature")?;
 
 		debug!("Sending payment to CLN for invoice: {}", invoice);
@@ -544,6 +545,7 @@ impl LightningManager {
 		}).await?.into_inner();
 
 		let invoice = Bolt11Invoice::from_str(&res.bolt11)?;
+		Invoice::Bolt11(invoice.clone()).require_xbt()?;
 
 		// Raw agent, not the bucketed label -- see start_lightning_payment.
 		let user_agent = telemetry::current_user_agent();

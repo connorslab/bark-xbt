@@ -333,7 +333,8 @@ pub(crate) async fn start_lightning_send(
 		bail!("Invoice is for wrong network: {}", invoice.network());
 	}
 
-	invoice.check_signature()?;
+	invoice.require_xbt()?;
+		invoice.check_signature()?;
 
 	let payment_amount = invoice.get_payment_amount(user_amount)?;
 	if payment_amount == Amount::ZERO {

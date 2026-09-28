@@ -126,4 +126,5 @@ tracing-subscriber = { version = "0.3.22", features = [ "std", "registry", "ansi
 tracing-attributes = "0.1.31"
 
 [patch.crates-io]
+lightning-types = { path = "vendor/lightning-types" }
 bitcoin = { path = "vendor/bitcoin" }

@@ -37,15 +37,24 @@ pub fn sign(wallet: &Wallet, psbt: &mut Psbt) -> Result<bool, Error> {
 	// Work on a copy: any error leaves the caller's PSBT untouched.
 	let mut result = psbt.clone();
 	for (idx, input) in result.inputs.iter_mut().enumerate() {
+		if input.sighash_type.is_some_and(|s| s.to_u32() != u32::from(unified::ALL)) {
+			return Err(Error::Unsupported);
+		}
 		if let Some(witness) = &input.final_script_witness {
 			if prevouts[idx].script_pubkey == ScriptBuf::new_p2a() && witness.is_empty() {
 				continue;
 			}
 			// Foreign exit inputs are signed by the Ark signer. Check all
 			// signature-sized stack elements, excluding script/control block.
+			if !prevouts[idx].script_pubkey.is_p2tr() { return Err(Error::Unsupported); }
 			let stack = witness.iter().collect::<Vec<_>>();
-			let stack = if stack.len() >= 2 { &stack[..stack.len()-2] } else { &stack[..] };
-			if stack.is_empty() || stack.iter().any(|s| s.len() == 64
+			// Annexes are not produced by our wallet and require separate parsing.
+			if stack.len() == 2 || stack.last().is_some_and(|s| s.first() == Some(&0x50)) {
+				return Err(Error::Unsupported);
+			}
+			let stack = if stack.len() >= 3 { &stack[..stack.len()-2] } else { &stack[..] };
+			if !stack.iter().any(|s| s.len() == 65 && s[64] == unified::ALL)
+				|| stack.iter().any(|s| s.len() == 64
 				|| (s.len() == 65 && s[64] != unified::ALL)) {
 				return Err(Error::Unsupported);
 			}
@@ -71,7 +80,7 @@ pub fn sign(wallet: &Wallet, psbt: &mut Psbt) -> Result<bool, Error> {
 			};
 			let full = path.as_ref();
 			if *fingerprint != expected || !full.starts_with(prefix) { continue; }
-			let derived = xkey.xkey.derive_priv(&secp, &full[prefix.len()..])
+			let derived = xkey.xkey.derive_priv(&secp, &&full[prefix.len()..])
 				.map_err(|_| Error::Unsupported)?;
 			let pair = Keypair::from_secret_key(&secp, &derived.private_key);
 			if pair.x_only_public_key().0 == internal { keypair = Some(pair); break; }
@@ -80,7 +89,7 @@ pub fn sign(wallet: &Wallet, psbt: &mut Psbt) -> Result<bool, Error> {
 		let hash = unified::digest(&psbt.unsigned_tx, idx, &prevouts, unified::ALL,
 			Execution { script_type: 2, script_code: None, annex: None, leaf: None })?;
 		let sig = secp.sign_schnorr(&hash.into(), &pair);
-		input.sighash_type = Some(u32::from(unified::ALL).into());
+		input.sighash_type = Some(bitcoin::psbt::PsbtSighashType::from_u32(u32::from(unified::ALL)));
 		input.final_script_witness = Some(Witness::from_slice(&[unified::signature(&sig)]));
 	}
 	*psbt = result;
