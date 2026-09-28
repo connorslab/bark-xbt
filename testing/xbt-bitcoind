@@ -13,4 +13,4 @@ case " $* " in
     *) echo 'XBT fixture requires explicit -regtest' >&2; exit 1 ;;
 esac
 exec "$XBT_BITCOIND" "$@" -testactivationheight=blake2b@100 \
-    -acceptnonstdtxn=0 -dnsseed=0 -discover=0
+    -acceptnonstdtxn=0 -mempooltruc=enforce -dnsseed=0 -discover=0

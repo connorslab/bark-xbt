@@ -9,6 +9,8 @@ The XBT port adds unified signature hashing, explicit 0x21 Ark witnesses,
 a fail-closed Taproot wallet signer, and Blake2b extended-header support.
 The client/server protocol uses a separate experimental version namespace.
 Mainnet wallet startup is disabled while integration validation is unfinished.
+The private Knots backend requires `mempooltruc=enforce`; its default
+`accept` mode cannot relay Bark's zero-fee parent packages.
 
 Upstream Bark uses Core 31 mempool chunks. This port adds a conservative
 individual-ancestor fee floor for Knots 29; it can cause extra fee-bump

@@ -255,6 +255,8 @@ pub async fn require_network(client: &Client, expected: Network) -> anyhow::Resu
 	let hash: BlockHash = client.call_raw("getbestblockhash", &[]).await?;
 	let raw: String = client.call_raw("getblockheader", &[json_arg(hash)?, false.into()]).await?;
 	anyhow::ensure!(raw.len() == 328, "XBT backend must be activated before starting Bark");
+	let mempool: serde_json::Value = client.call_raw("getmempoolinfo", &[]).await?;
+	anyhow::ensure!(mempool["truc_policy"] == "enforce", "XBT backend requires mempooltruc=enforce for Ark package relay");
 	if network != expected {
 		bail!("Network mismatch: server is configured to use {:?} but bitcoind uses {:?}",
 			expected, network,

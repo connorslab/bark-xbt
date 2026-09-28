@@ -295,6 +295,8 @@ impl ChainSource {
 				let hash: BlockHash = rpc.call_raw("getbestblockhash", &[]).await?;
 				let raw: String = rpc.call_raw("getblockheader", &[serde_json::to_value(hash)?, false.into()]).await?;
 				anyhow::ensure!(raw.len() == 328, "XBT backend must be activated before starting Bark");
+				let mempool: serde_json::Value = rpc.call_raw("getmempoolinfo", &[]).await?;
+				anyhow::ensure!(mempool["truc_policy"] == "enforce", "XBT backend requires mempooltruc=enforce for Ark package relay");
 				(ChainSourceClient::Bitcoind { rpc, sync }, zmq)
 			},
 			#[cfg(not(feature = "bitcoind-rpc"))]

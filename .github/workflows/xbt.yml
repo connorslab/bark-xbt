@@ -51,6 +51,12 @@ jobs:
           tar -xf /tmp/knots.tar.gz -C /tmp/xbt-knots --strip-components=1
       - name: Private regtest consensus and replay checks
         run: XBT_BITCOIND=/tmp/xbt-knots/bin/bitcoind nix develop --command python3 testing/xbt_regtest.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: consensus-report
+          path: xbt-regtest-report.json
+          retention-days: 14
       - name: Check wallet and server
         if: ${{ !cancelled() }}
         run: nix develop --command cargo check -p bark-wallet -p bark-server

@@ -76,8 +76,10 @@ def main():
         with tempfile.TemporaryDirectory(prefix="paperclip-bark-xbt-") as directory:
             root = Path(directory)
             xbt = Node(root, "xbt", os.environ["XBT_BITCOIND"], 18843,
-                       ["-testactivationheight=blake2b@120"])
+                       ["-testactivationheight=blake2b@120", "-mempooltruc=enforce"])
             nodes.append(xbt)
+            report["truc_policy"] = xbt.rpc("getmempoolinfo")["truc_policy"]
+            assert report["truc_policy"] == "enforce"
             btc = Node(root, "btc", os.environ["BITCOIND_EXEC"], 18844, [])
             nodes.append(btc)
             report["xbt_binary_sha256"] = hashlib.sha256(Path(os.environ["XBT_BITCOIND"]).read_bytes()).hexdigest()

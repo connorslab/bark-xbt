@@ -36,6 +36,10 @@ consensus validation; witness suffix checks are not proof of authorization.
 rust-bitcoin can decode and hash the 164-byte Blake2b header while preserving
 historical 80-byte headers. RPC startup requires an activated regtest backend.
 Mainnet wallet startup and the unvalidated Esplora backend are rejected.
+Knots must explicitly use `mempooltruc=enforce`: its default `accept` mode
+rejects Bark's zero-fee parent transactions even in a funded package. The
+startup checks reject this incompatible default. Tests keep
+`acceptnonstdtxn=0` and the default minimum relay fee.
 
 The Ark protocol has a separate experimental version namespace. Lightning
 invoice parsing recognizes identity bit 512, and outgoing payments and generated
@@ -63,7 +67,7 @@ outputs. It checks:
 4. A unified Taproot key spend accepted by XBT and rejected by BTC, alongside
    a BTC legacy control spend of the same funding output.
 5. A real Ark BoardBuilder MuSig transaction, its CPFP child, and a delayed
-   script-path exit claim under standard relay policy.
+   script-path exit claim with standard-transaction checks and explicit TRUC enforcement.
 
 These are **test assertions, not a statement that the latest run passed**.
 Consult the workflow result and `xbt-regtest-report.json` artifact. The report
